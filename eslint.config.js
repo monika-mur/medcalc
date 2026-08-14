@@ -70,6 +70,11 @@ const astroConfig = tseslint.config({
 
 export default tseslint.config(
   includeIgnoreFile(gitignorePath),
+  // Generated verbatim by `npm run db:types` and committed, never hand-edited.
+  // Linting it is a dead end: --fix would be undone by the next regeneration,
+  // and the "no diff after regenerating" check is what keeps the types honest
+  // about the migration.
+  { ignores: ["src/db/database.types.ts"] },
   baseConfig,
   reactConfig,
   eslintPluginAstro.configs["flat/recommended"],

@@ -18,7 +18,6 @@ export default function SignUpForm({ serverError }: Props) {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string; confirmPassword?: string }>({});
-
   function validate() {
     const next: typeof errors = {};
 
@@ -123,6 +122,17 @@ export default function SignUpForm({ serverError }: Props) {
           />
         }
       />
+
+      {/*
+        Rendered empty and left alone by React. The browser's IANA zone is
+        written in by the inline script in `signup.astro`, which runs on the
+        submit event AFTER React's own handler — writing it at mount does not
+        survive, because validate()'s setErrors() re-render resets an
+        uncontrolled input back to this defaultValue before the POST goes out.
+        With JavaScript disabled nothing writes it, so it submits empty and the
+        route stores no `timezone` key at all.
+      */}
+      <input type="hidden" name="timezone" defaultValue="" />
 
       <ServerError message={serverError} />
 

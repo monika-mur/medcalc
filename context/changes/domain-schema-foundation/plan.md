@@ -374,7 +374,13 @@ Surface the schema to the application as generated types, and capture the user t
 
 **Intent**: Send the browser's IANA timezone with the signup POST, so the stored user metadata holds a real value instead of the fallback.
 
-**Contract**: a hidden `timezone` input inside the existing form (`SignUpForm.tsx:66`), defaulting to `"UTC"` on the server render and set to `Intl.DateTimeFormat().resolvedOptions().timeZone` in an effect after hydration — the two-step avoids a hydration mismatch, since the server has no access to the client's zone. No change to validation.
+**Contract**: a hidden `timezone` input inside the existing form (`SignUpForm.tsx:66`), rendering **empty** on the server and set to `Intl.DateTimeFormat().resolvedOptions().timeZone` in an effect after hydration — the two-step avoids a hydration mismatch, since the server has no access to the client's zone. No change to validation.
+
+**Amended again 2026-08-14, after manual verification failed.** The write does not happen at mount at all — it happens on the form's `submit` event, from an `is:inline` script in `src/pages/auth/signup.astro`, listening on `document` in the bubble phase.
+
+Writing at mount (whether by `setState` or by a ref) is observably lost before the POST. `handleSubmit` calls `validate()`, which calls `setErrors(next)` with a fresh object; that re-render resets the uncontrolled hidden input to its `defaultValue` in the same tick the browser is preparing to serialise the form. Diagnosed by elimination against a running dev server: the island hydrated (`reactHydrated: true`, all island URLs 200), the field held the correct zone at rest, and the route still received `""` — so the loss was strictly between mount and submission. A bubble-phase `document` listener is the last writer before the native POST. Keeping it outside the island also means a later change to `SignUpForm` cannot silently break it, and with JavaScript disabled nothing runs, so the field submits empty and no `timezone` key is stored — criterion 3.6 preserved.
+
+**Amended 2026-08-14, during Phase 3.** This section previously specified `"UTC"` as the server-render default. That contradicted §4 below ("An absent or empty value is left out entirely") and criterion 3.6 ("stores no `timezone` key at all"): a non-empty `"UTC"` would be forwarded like any other zone, making §4's empty branch dead code and criterion 3.6 unreachable. It would also have given JS-disabled signups silent UTC date arithmetic instead of S-04's intended `Europe/Warsaw` fallback. Either constant avoids the hydration mismatch equally well, so the empty string is the one that keeps the rest of the plan coherent.
 
 #### 4. Signup route passes metadata
 
@@ -616,29 +622,29 @@ Folding the liquid fields onto `medications` also removes a join from every dash
 
 #### Automated
 
-- [x] 2.1 `npm run db:test` passes with every planned assertion green
-- [x] 2.2 Suite passes from a clean `npm run db:reset`
-- [x] 2.3 Test count matches the declared pgTAP plan in each file
+- [x] 2.1 `npm run db:test` passes with every planned assertion green — 1322caa
+- [x] 2.2 Suite passes from a clean `npm run db:reset` — 1322caa
+- [x] 2.3 Test count matches the declared pgTAP plan in each file — 1322caa
 
 #### Manual
 
-- [x] 2.4 Test names map to an FR or to a decision in this plan
-- [x] 2.5 Weakening an RLS policy locally makes the suite fail
+- [x] 2.4 Test names map to an FR or to a decision in this plan — 1322caa
+- [x] 2.5 Weakening an RLS policy locally makes the suite fail — 1322caa
 
 ### Phase 3: Typed client and signup timezone capture
 
 #### Automated
 
-- [ ] 3.1 `npm run db:types` produces no diff against the committed file
-- [ ] 3.2 `npx astro sync && npx astro check` passes with no type errors
-- [ ] 3.3 `npm run lint` passes, including `react-compiler` on the modified form
-- [ ] 3.4 `npm run build` succeeds
+- [x] 3.1 `npm run db:types` produces no diff against the committed file
+- [x] 3.2 `npx astro sync && npx astro check` passes with no type errors
+- [x] 3.3 `npm run lint` passes, including `react-compiler` on the modified form
+- [x] 3.4 `npm run build` succeeds
 
 #### Manual
 
-- [ ] 3.5 Signup stores `user_metadata.timezone` matching the browser's timezone
-- [ ] 3.6 Signup with JavaScript disabled succeeds and stores no `timezone` key at all
-- [ ] 3.7 Existing sign-in and sign-out flows are unaffected
+- [x] 3.5 Signup stores `user_metadata.timezone` matching the browser's timezone
+- [x] 3.6 Signup with JavaScript disabled succeeds and stores no `timezone` key at all
+- [x] 3.7 Existing sign-in and sign-out flows are unaffected
 
 ### Phase 4: Vitest integration suite and documentation
 
