@@ -2,7 +2,7 @@
 # https://supabase.com/docs/guides/local-development/cli/config
 # A string used to distinguish different Supabase projects on the same host. Defaults to the
 # working directory name when running `supabase init`.
-project_id = "10x-astro-starter"
+project_id = "medcalc"
 
 [api]
 enabled = true
@@ -355,7 +355,12 @@ authorization_url_path = "/oauth/consent"
 allow_dynamic_registration = false
 
 [edge_runtime]
-enabled = true
+# Disabled: this project ships no Edge Functions (no supabase/functions/, no
+# functions.invoke callers), and behind the corporate TLS-intercepting proxy the
+# container fails to bootstrap — it fetches https://deno.land/std/... at boot and
+# hits `invalid peer certificate: UnknownIssuer`, which aborts `supabase start`
+# for the whole stack. Re-enable if Edge Functions are ever added.
+enabled = false
 # Supported request policies: `oneshot`, `per_worker`.
 # `per_worker` (default) — enables hot reload during local development.
 # `oneshot` — fallback mode if hot reload causes issues (e.g. in large repos or with symlinks).
