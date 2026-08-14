@@ -151,22 +151,37 @@ Four things to expect, in the order they tend to bite:
 
 **Intent**: The core entity, carrying only facts that do not change over time — deliberately no `daily_dosage` and no `quantity_on_hand` column — plus FR-008's liquid sub-type fields, nullable and CHECK-guarded so that creating a liquid medication is a single atomic insert.
 
-**Contract**: `(id uuid PK DEFAULT gen_random_uuid(), user_id uuid NOT NULL DEFAULT auth.uid(), specialist_id uuid NOT NULL, name text NOT NULL, form medication_form NOT NULL DEFAULT 'solid', expiry_date date NOT NULL, container_capacity numeric NULL CHECK > 0, estimated_daily_consumption numeric NULL CHECK > 0, post_opening_expiry_days integer NULL CHECK > 0, opened_on date NULL, archived_at timestamptz NULL, created_at, updated_at)`, `UNIQUE (id, user_id)`, the composite foreign key that makes cross-owner rows impossible, and the two CHECKs that replace the former deferred constraint trigger:
+**Contract**: `(id uuid PK DEFAULT gen_random_uuid(), user_id uuid NOT NULL DEFAULT auth.uid(), specialist_id uuid NOT NULL, name text NOT NULL, form medication_form NOT NULL DEFAULT 'solid', expiry_date date NOT NULL, container_capacity numeric NULL CHECK > 0, estimated_daily_consumption numeric NULL CHECK > 0, post_opening_expiry_days integer NULL CHECK > 0, opened_on date NULL, archived_at timestamptz NULL, created_at, updated_at)`, `UNIQUE (id, user_id)`, the composite foreign key that makes cross-owner rows impossible, and the single CHECK that replaces the former deferred constraint trigger:
 
 ```sql
 constraint medications_specialist_fk
   foreign key (specialist_id, user_id)
   references public.specialists (id, user_id) on delete restrict,
 
--- the liquid fields are present exactly when the medication is liquid
-check ((form = 'liquid') = (container_capacity is not null
-                        and estimated_daily_consumption is not null
-                        and post_opening_expiry_days is not null)),
--- an opening date is meaningless for a solid medication
-check (form = 'liquid' or opened_on is null)
+-- the liquid fields are present exactly when the medication is liquid,
+-- and a solid carries NONE of them
+check (
+  case form
+    when 'liquid' then container_capacity is not null
+                 and estimated_daily_consumption is not null
+                 and post_opening_expiry_days is not null
+    else container_capacity is null
+     and estimated_daily_consumption is null
+     and post_opening_expiry_days is null
+     and opened_on is null
+  end
+)
 ```
 
-`opened_on` is what makes post-opening expiry computable; NULL on a liquid means not yet opened, which is why it is excluded from the presence CHECK.
+**Amended 2026-08-14, during Phase 1.** This section previously specified two constraints, the first written as a boolean equality:
+
+```sql
+check ((form = 'liquid') = (a is not null and b is not null and c is not null))
+```
+
+That form does not do what the surrounding prose says. For a **solid** row carrying one or two stray liquid fields, the left side is `false` and the right side is also `false`, so `false = false` passes — it only rejects a solid carrying all three. A partially-populated solid is the likelier mistake, so it must fail. The `CASE` above is what the migration ships; it is strictly stronger and absorbs the former separate `opened_on` constraint into its `else` branch. Caught by criterion 1.5. The prose contract here, criterion 1.5, and Phase 2 §4 all already described the correct behaviour — only this snippet was wrong.
+
+`opened_on` is what makes post-opening expiry computable; NULL on a liquid means not yet opened, which is why it is excluded from the `liquid` branch.
 
 #### 5. `dosage_changes`
 
@@ -582,33 +597,33 @@ Folding the liquid fields onto `medications` also removes a join from every dash
 
 #### Automated
 
-- [x] 1.1 Preflight gate: `npx supabase start` brings the local stack up (verified before any SQL is written)
-- [x] 1.2 `npx supabase db reset` applies the migration with exit code 0
-- [x] 1.3 `npx supabase db reset` run a second time succeeds
-- [x] 1.4 All five tables report `rowsecurity = true`
-- [x] 1.5 Liquid medication missing its liquid fields is rejected by CHECK; solid medication carrying them is rejected too
-- [x] 1.6 `dosage_changes` accepts `daily_dosage = 0` and rejects a negative dosage
-- [x] 1.7 `DELETE` against `medications` is rejected by policy
-- [x] 1.8 Both no-procedural-code queries return 0 — `public`-scoped user triggers and non-extension `public` functions
-- [x] 1.9 `npm run lint` passes
+- [x] 1.1 Preflight gate: `npx supabase start` brings the local stack up (verified before any SQL is written) — cc2cdaa
+- [x] 1.2 `npx supabase db reset` applies the migration with exit code 0 — cc2cdaa
+- [x] 1.3 `npx supabase db reset` run a second time succeeds — cc2cdaa
+- [x] 1.4 All five tables report `rowsecurity = true` — cc2cdaa
+- [x] 1.5 Liquid medication missing its liquid fields is rejected by CHECK; solid medication carrying them is rejected too — cc2cdaa
+- [x] 1.6 `dosage_changes` accepts `daily_dosage = 0` and rejects a negative dosage — cc2cdaa
+- [x] 1.7 `DELETE` against `medications` is rejected by policy — cc2cdaa
+- [x] 1.8 Both no-procedural-code queries return 0 — `public`-scoped user triggers and non-extension `public` functions — cc2cdaa
+- [x] 1.9 `npm run lint` passes — cc2cdaa
 
 #### Manual
 
-- [x] 1.10 Studio shows all five tables with expected columns and relationships
-- [x] 1.11 Studio Auth → Policies lists the expected policy set per table
+- [x] 1.10 Studio shows all five tables with expected columns and relationships — cc2cdaa
+- [x] 1.11 Studio Auth → Policies lists the expected policy set per table — cc2cdaa
 
 ### Phase 2: pgTAP database tests
 
 #### Automated
 
-- [ ] 2.1 `npm run db:test` passes with every planned assertion green
-- [ ] 2.2 Suite passes from a clean `npm run db:reset`
-- [ ] 2.3 Test count matches the declared pgTAP plan in each file
+- [x] 2.1 `npm run db:test` passes with every planned assertion green
+- [x] 2.2 Suite passes from a clean `npm run db:reset`
+- [x] 2.3 Test count matches the declared pgTAP plan in each file
 
 #### Manual
 
-- [ ] 2.4 Test names map to an FR or to a decision in this plan
-- [ ] 2.5 Weakening an RLS policy locally makes the suite fail
+- [x] 2.4 Test names map to an FR or to a decision in this plan
+- [x] 2.5 Weakening an RLS policy locally makes the suite fail
 
 ### Phase 3: Typed client and signup timezone capture
 
