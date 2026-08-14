@@ -14,6 +14,26 @@ const error = Astro.url.searchParams.get("error");
         Sign up
       </h1>
       <SignUpForm serverError={error} client:load />
+      {
+        /*
+        Stamp the browser's IANA timezone onto the form's hidden field at submit
+        time. Deliberately NOT a React effect: the form re-renders during
+        submission (validate() calls setErrors), and that re-render resets the
+        uncontrolled hidden input to its defaultValue, so a value written at
+        mount never reaches the server. This listener is on `document` in the
+        bubble phase, so it runs after React's own submit handler and after the
+        re-render it triggers — last writer before the native POST wins.
+
+        Kept out of the island on purpose: it has nothing to do with rendering,
+        and this way it cannot be broken by a change to the component.
+      */
+      }
+      <script is:inline>
+        document.addEventListener("submit", (event) => {
+          const field = event.target?.querySelector?.('input[name="timezone"]');
+          if (field) field.value = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        });
+      </script>
       <p class="mt-4 text-center text-sm text-blue-100/60">
         Already have an account? <a href="/auth/signin" class="text-purple-300 hover:underline">Sign in</a>
       </p>

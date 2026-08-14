@@ -35,21 +35,21 @@ Rationale in full: `plan.md` → "Decided: no procedural database code". Prompte
 
 ---
 
-## Implementation status — Phase 1 complete 2026-08-14
+## Implementation status — Phases 1–2 complete 2026-08-14
 
-**Phase 1 is fully verified and committed** as `cc2cdaa`.
+**Phases 1 and 2 are fully verified and committed**, as `cc2cdaa` and `1322caa`.
 
 ### Where the run stands
 
 | Phase                               | State                                                  |
 | ----------------------------------- | ------------------------------------------------------ |
 | 1 — Domain schema migration         | Automated 1.1–1.9 ✅ · Manual 1.10–1.11 ✅ · `cc2cdaa` |
-| 2 — pgTAP database tests            | not started                                            |
-| 3 — Typed client + timezone capture | not started                                            |
+| 2 — pgTAP database tests            | Automated 2.1–2.3 ✅ · Manual 2.4–2.5 ✅ · `1322caa`   |
+| 3 — Typed client + timezone capture | in progress                                            |
 | 4 — Vitest suite + docs             | not started                                            |
 | 5 — Push to Supabase Cloud          | not started                                            |
 
-`plan.md` → `## Progress` is the canonical checkbox state and is up to date; all eleven Phase 1 rows carry `cc2cdaa`.
+`plan.md` → `## Progress` is the canonical checkbox state and is up to date; all eleven Phase 1 rows carry `cc2cdaa` and all five Phase 2 rows carry `1322caa`.
 
 The Phase 1 commit bundles the whole `.claude/` toolkit, `context/foundation/roadmap*.md`, and five pre-existing dirty files alongside the phase's own set — included deliberately at the author's request when the dirty-path gate ran, and enumerated in the commit body.
 
@@ -58,10 +58,10 @@ The Phase 1 commit bundles the whole `.claude/` toolkit, `context/foundation/roa
 ### Resume with
 
 ```
-/10x-implement domain-schema-foundation phase 2
+/10x-implement domain-schema-foundation phase 3
 ```
 
-It will pick up at **2.1** — the pgTAP suite. `plan.md` §4's liquid CHECK SQL was amended on 2026-08-14 to match the migration (see deviation 2 below), so plan and schema now agree.
+It will pick up at **3.1** — generated types, the typed Supabase client, and signup timezone capture.
 
 ### Environment prerequisites (must be re-done after any reboot)
 
