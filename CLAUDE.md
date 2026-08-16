@@ -41,11 +41,26 @@ Wrangler reads `.dev.vars` (not `.env`) for runtime secrets during `npm run dev`
 
 - Local dev: run `npx supabase start`, then copy the printed `API URL` and `anon key` to `.env` and `.dev.vars`.
 - Cloud: set `.env` and `.dev.vars` to your cloud project values.
-- No migrations exist yet — create new ones with `npx supabase migration new <name>`.
+- Migrations live in `supabase/migrations/`; create new ones with `npx supabase migration new <name>`. `npm run db:reset` re-applies them from scratch; `npm run db:types` regenerates `src/db/database.types.ts` (committed, never hand-edited).
 
 ## Testing
 
-- Vitest is the intended test runner but is **not yet installed**. Do not try to run or generate test commands.
+- `npm test` — Vitest integration tests (`tests/integration/`). **Requires a running local Supabase stack** (`npx supabase start`); the helper refuses to run against a non-local `SUPABASE_URL`, because these tests sign up users and write rows.
+- `npm run db:test` — pgTAP database tests (`supabase/tests/`), run by `supabase test db` against the local database.
+- Database-level invariants (RLS, CHECK, FK, uniqueness) belong in `supabase/tests/`. Behaviour on the client path — anything that goes through PostgREST or `@supabase/supabase-js` — belongs in `tests/integration/`.
+- Both layers earn their keep: pgTAP catches a broken constraint, the integration suite catches a policy targeting the wrong role. A `check ((x = 'a') = (p and q))`-shaped constraint passed pgTAP and was caught by the integration suite; write presence constraints as `CASE`, and assert the partially-populated case in both.
+
+## Domain schema
+
+- **Dosage lives only in `dosage_changes`; quantity lives only in `supply_events` deltas.** Never add a cached `daily_dosage` or `quantity_on_hand` column to `medications` — the absence of a second copy is what makes drift impossible.
+- **`supply_events` is append-only, and `dosage_changes` is immutable once effective** (deletable only while `effective_date > current_date`). Corrections are new rows — an `adjustment` event, or a later dosage change — never an UPDATE.
+- **`medications` cannot be deleted** by policy; archival is `archived_at` (FR-007). Under RLS a DELETE with no policy matches zero rows rather than raising, so tests assert the row survives.
+- **The schema carries no triggers, no database functions, and no RPC by design.** New invariants belong in CHECK / FK / UNIQUE / RLS. Reaching for a trigger or an RPC is a signal to re-plan, not to write one — the no-procedural-code property is asserted as a test.
+- **A recount insert must supply `quantity_delta` itself**, alongside `counted_quantity` and `projected_quantity`. Nothing computes it server-side; a CHECK holds `quantity_delta = counted_quantity − projected_quantity` and rejects a row where the three disagree. The discrepancy signal is `quantity_delta <> 0` on a recount row.
+- **The liquid sub-type is nullable columns on `medications`** (`container_capacity`, `estimated_daily_consumption`, `post_opening_expiry_days`, `opened_on`) guarded by a CHECK, so creating one is a single insert. A second sub-type is the signal to revisit that — not a reason to add nullable columns for it.
+- **`daily_dosage = 0` means "stopped, keep the history"** and is distinct from archival, which hides the medication. A medication with no `dosage_changes` rows reads as dosage 0; one with no `supply_events` rows reads as quantity 0. Both are legal states, which is what makes a partial multi-statement create harmless.
+- **Consequently the supply-end date is undefined, not computed, when dosage is 0** — never divide by it. A `5 → 0 → 5` series is three segments with zero consumption in the middle, not a gap to skip.
+- **Current-state views** (latest dosage + current balance) are to be created once, at first need in S-04, and reused — not reimplemented per slice.
 
 ## Git conventions
 
@@ -67,18 +82,18 @@ Turn one roadmap item into the first implementation cycle with the **change plan
 
 ### Task Router - Where to start
 
-| Skill | Use it when |
-| --- | --- |
-| **Change setup (lesson focus)** | |
-| `/10x-new <change-id>` | You selected a roadmap item and need a stable change folder. Creates `context/changes/<change-id>/change.md` so planning, implementation, progress, commits, and later review all share one identity. Use AFTER roadmap selection, BEFORE `/10x-plan`. |
-| **Planning (lesson focus)** | |
-| `/10x-plan <change-id>` | You have a change folder and need a reviewable implementation plan. Reads roadmap context, foundation docs, codebase evidence, and any existing change notes; writes `plan.md` and `plan-brief.md` with phases, file contracts, success criteria, and `## Progress`. |
-| **Plan readiness (lesson focus)** | |
-| `/10x-plan-review <change-id>` | You have `plan.md` and need a light pre-code readiness check. Use it to catch missing end state, weak contracts, malformed progress, scope drift, or blind spots before code changes begin. |
-| **Implementation (lesson focus)** | |
-| `/10x-implement <change-id> phase <n>` | You have an approved plan and want to execute one phase with verification, manual gate, commit ritual, and SHA write-back to `## Progress`. |
-| **Lifecycle closure** | |
-| `/10x-archive <change-id>` | A change is merged or intentionally closed. Move it out of active `context/changes/` into archive state. |
+| Skill                                  | Use it when                                                                                                                                                                                                                                                          |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Change setup (lesson focus)**        |                                                                                                                                                                                                                                                                      |
+| `/10x-new <change-id>`                 | You selected a roadmap item and need a stable change folder. Creates `context/changes/<change-id>/change.md` so planning, implementation, progress, commits, and later review all share one identity. Use AFTER roadmap selection, BEFORE `/10x-plan`.               |
+| **Planning (lesson focus)**            |                                                                                                                                                                                                                                                                      |
+| `/10x-plan <change-id>`                | You have a change folder and need a reviewable implementation plan. Reads roadmap context, foundation docs, codebase evidence, and any existing change notes; writes `plan.md` and `plan-brief.md` with phases, file contracts, success criteria, and `## Progress`. |
+| **Plan readiness (lesson focus)**      |                                                                                                                                                                                                                                                                      |
+| `/10x-plan-review <change-id>`         | You have `plan.md` and need a light pre-code readiness check. Use it to catch missing end state, weak contracts, malformed progress, scope drift, or blind spots before code changes begin.                                                                          |
+| **Implementation (lesson focus)**      |                                                                                                                                                                                                                                                                      |
+| `/10x-implement <change-id> phase <n>` | You have an approved plan and want to execute one phase with verification, manual gate, commit ritual, and SHA write-back to `## Progress`.                                                                                                                          |
+| **Lifecycle closure**                  |                                                                                                                                                                                                                                                                      |
+| `/10x-archive <change-id>`             | A change is merged or intentionally closed. Move it out of active `context/changes/` into archive state.                                                                                                                                                             |
 
 ### How the chain hands off
 

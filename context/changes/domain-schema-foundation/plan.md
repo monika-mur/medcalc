@@ -635,29 +635,29 @@ Folding the liquid fields onto `medications` also removes a join from every dash
 
 #### Automated
 
-- [x] 3.1 `npm run db:types` produces no diff against the committed file
-- [x] 3.2 `npx astro sync && npx astro check` passes with no type errors
-- [x] 3.3 `npm run lint` passes, including `react-compiler` on the modified form
-- [x] 3.4 `npm run build` succeeds
+- [x] 3.1 `npm run db:types` produces no diff against the committed file — 85039ad
+- [x] 3.2 `npx astro sync && npx astro check` passes with no type errors — 85039ad
+- [x] 3.3 `npm run lint` passes, including `react-compiler` on the modified form — 85039ad
+- [x] 3.4 `npm run build` succeeds — 85039ad
 
 #### Manual
 
-- [x] 3.5 Signup stores `user_metadata.timezone` matching the browser's timezone
-- [x] 3.6 Signup with JavaScript disabled succeeds and stores no `timezone` key at all
-- [x] 3.7 Existing sign-in and sign-out flows are unaffected
+- [x] 3.5 Signup stores `user_metadata.timezone` matching the browser's timezone — 85039ad
+- [x] 3.6 Signup with JavaScript disabled succeeds and stores no `timezone` key at all — 85039ad
+- [x] 3.7 Existing sign-in and sign-out flows are unaffected — 85039ad
 
 ### Phase 4: Vitest integration suite and documentation
 
 #### Automated
 
-- [ ] 4.1 `npm test` passes against a running local Supabase stack
-- [ ] 4.2 `npm run lint` passes on the new test files
-- [ ] 4.3 `npm run build` still succeeds
+- [x] 4.1 `npm test` passes against a running local Supabase stack
+- [x] 4.2 `npm run lint` passes on the new test files
+- [x] 4.3 `npm run build` still succeeds
 
 #### Manual
 
-- [ ] 4.4 `CLAUDE.md` testing commands run as written
-- [ ] 4.5 Domain schema section is specific enough to prevent a cached-column regression
+- [x] 4.4 `CLAUDE.md` testing commands run as written
+- [x] 4.5 Domain schema section is specific enough to prevent a cached-column regression
 
 ### Phase 5: Push to Supabase Cloud
 

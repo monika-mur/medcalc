@@ -170,10 +170,22 @@ create table public.supply_events (
   recorded_at timestamptz not null default now(),
   note text null,
 
-  -- the recount fields are present exactly when the event is a recount
+  -- The recount fields are present exactly when the event is a recount, and a
+  -- non-recount carries NEITHER of them.
+  --
+  -- Written as a CASE, not as `(event_type = 'recount') = (a is not null and b
+  -- is not null)`: for an adjustment carrying one stray field the boolean form
+  -- has false on both sides and passes, so it only rejects a non-recount
+  -- carrying BOTH. Same defect shape as the liquid CHECK on medications above.
   constraint supply_events_recount_fields_match_type
-    check ((event_type = 'recount')
-             = (counted_quantity is not null and projected_quantity is not null)),
+    check (
+      case event_type
+        when 'recount' then counted_quantity is not null
+                        and projected_quantity is not null
+        else counted_quantity is null
+         and projected_quantity is null
+      end
+    ),
   -- a recount's delta IS the discrepancy. numeric is exact decimal, so this
   -- equality is not subject to floating-point drift.
   constraint supply_events_recount_delta_is_discrepancy

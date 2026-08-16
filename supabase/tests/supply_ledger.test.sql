@@ -14,7 +14,7 @@ create extension if not exists pgtap with schema extensions;
 
 begin;
 
-select plan(12);
+select plan(14);
 
 insert into auth.users (id) values ('a0000000-0000-0000-0000-00000000000a');
 
@@ -93,6 +93,23 @@ select throws_ok($$
     values ('d1000000-0000-0000-0000-00000000000a', 'refill', 10, 25, 28, current_date)
   $$, '23514', null,
   'refill: a non-recount row carrying the recount fields is rejected');
+
+-- A non-recount carrying ONE stray field is the likelier mistake, and the case
+-- the original boolean-equality CHECK let through. Added 2026-08-16 after
+-- Phase 4's integration suite caught it.
+select throws_ok($$
+    insert into public.supply_events
+      (medication_id, event_type, quantity_delta, counted_quantity, occurred_on)
+    values ('d1000000-0000-0000-0000-00000000000a', 'adjustment', -5, 25, current_date)
+  $$, '23514', null,
+  'adjustment: a non-recount row carrying only counted_quantity is rejected');
+
+select throws_ok($$
+    insert into public.supply_events
+      (medication_id, event_type, quantity_delta, projected_quantity, occurred_on)
+    values ('d1000000-0000-0000-0000-00000000000a', 'adjustment', -5, 28, current_date)
+  $$, '23514', null,
+  'adjustment: a non-recount row carrying only projected_quantity is rejected');
 
 -- ---------------------------------------------------------------------------
 -- Refill direction, and the adjustment escape hatch

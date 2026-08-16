@@ -3,7 +3,7 @@ change_id: domain-schema-foundation
 title: Domain schema for specialists, medications, dosage-change history, and visits
 status: implementing
 created: 2026-08-10
-updated: 2026-08-14
+updated: 2026-08-16
 archived_at: null
 ---
 
@@ -35,9 +35,9 @@ Rationale in full: `plan.md` → "Decided: no procedural database code". Prompte
 
 ---
 
-## Implementation status — Phases 1–2 complete 2026-08-14
+## Implementation status — paused after Phase 3, 2026-08-14
 
-**Phases 1 and 2 are fully verified and committed**, as `cc2cdaa` and `1322caa`.
+**Phases 1–3 are fully verified and committed.** Phases 4 and 5 are not started.
 
 ### Where the run stands
 
@@ -45,11 +45,24 @@ Rationale in full: `plan.md` → "Decided: no procedural database code". Prompte
 | ----------------------------------- | ------------------------------------------------------ |
 | 1 — Domain schema migration         | Automated 1.1–1.9 ✅ · Manual 1.10–1.11 ✅ · `cc2cdaa` |
 | 2 — pgTAP database tests            | Automated 2.1–2.3 ✅ · Manual 2.4–2.5 ✅ · `1322caa`   |
-| 3 — Typed client + timezone capture | in progress                                            |
+| 3 — Typed client + timezone capture | Automated 3.1–3.4 ✅ · Manual 3.5–3.7 ✅ · `85039ad`   |
 | 4 — Vitest suite + docs             | not started                                            |
 | 5 — Push to Supabase Cloud          | not started                                            |
 
-`plan.md` → `## Progress` is the canonical checkbox state and is up to date; all eleven Phase 1 rows carry `cc2cdaa` and all five Phase 2 rows carry `1322caa`.
+`plan.md` → `## Progress` is the canonical checkbox state and is up to date; every Phase 1–3 row carries its phase's SHA. The working tree is clean apart from the Phase 3 SHA write-back and this section, which the next phase's commit will absorb.
+
+### Environment left behind (read before resuming)
+
+- **`.env` and `.dev.vars` point at the LOCAL stack**, not the cloud project. Switched deliberately for the Phase 3 manual checks so test signups would not land in production `medcalc`. Phase 4's Vitest suite wants exactly this, so it is left as-is. The original cloud values are backed up **outside the repo** at `%TEMP%\medcalc-env-backup\` (`C:\Users\<user>\AppData\Local\Temp\medcalc-env-backup\`) — restore them before any deploy work. They are also recoverable from the committed `.env.example`.
+- **Docker Desktop and the local Supabase stack must be restarted after a reboot** — see "Environment prerequisites" below.
+- **Seven throwaway accounts exist in the LOCAL database only** (from signup verification). `npm run db:reset` clears them; nothing reached the cloud project.
+
+### Phase 3 deviations
+
+1. **The timezone write is a submit-time `is:inline` script, not a mount-time effect.** The plan's approach is observably broken; full diagnosis in `plan.md` §3 under "Amended again". Two prior attempts (`setState` in an effect, then a ref write in an effect) both failed — the first trips `react-hooks/set-state-in-effect`, the second is silently reset by the re-render `validate()` triggers mid-submit.
+2. **`plan.md` §3 amended twice** — the `"UTC"`-vs-empty server-render default, then the write mechanism.
+3. **`src/db/database.types.ts` excluded from ESLint** (`eslint.config.js`). It arrived with 236 prettier errors; `--fix` would be undone by the next `db:types` and would break criterion 3.1.
+4. **`supabase/snippets/` deleted** — a Studio SQL-editor scratch file, unrelated to the change. Studio recreates the directory on next use; consider a `.gitignore` entry.
 
 The Phase 1 commit bundles the whole `.claude/` toolkit, `context/foundation/roadmap*.md`, and five pre-existing dirty files alongside the phase's own set — included deliberately at the author's request when the dirty-path gate ran, and enumerated in the commit body.
 
@@ -58,10 +71,10 @@ The Phase 1 commit bundles the whole `.claude/` toolkit, `context/foundation/roa
 ### Resume with
 
 ```
-/10x-implement domain-schema-foundation phase 3
+/10x-implement domain-schema-foundation phase 4
 ```
 
-It will pick up at **3.1** — generated types, the typed Supabase client, and signup timezone capture.
+It will pick up at **4.1** — installing Vitest, the `tests/integration/` suite against the local stack, and the `CLAUDE.md` testing + domain-schema sections. Phase 4 needs the local Supabase stack running; Phase 5 additionally needs the cloud project linked and the `.env` values restored.
 
 ### Environment prerequisites (must be re-done after any reboot)
 
@@ -96,6 +109,24 @@ Four, each agreed at the time. Only deviation 2 is recorded in `plan.md` itself 
 - **`throws_ok`'s 3-argument form is `(sql, errcode, errmsg)`, not `(sql, errcode, description)`.** Passing a description third makes pgTAP match it against the raised message and fail on a test that is actually behaving correctly. All negative assertions use the 4-argument form with a `null` message: `throws_ok($$…$$, '23514', null, 'description')`.
 - **Seeding runs as `postgres`, which owns these tables and therefore bypasses RLS** (they are not `FORCE ROW LEVEL SECURITY`), so fixtures are inserted with explicit `user_id`. Assertions then `set local role authenticated` + `set local request.jwt.claims`, which is the shape PostgREST uses.
 - **`auth.users` needs only `id` to seed.** Every other `NOT NULL` column carries a default.
+
+### Phase 4 deviations (2026-08-16)
+
+1. **The `supply_events` presence CHECK was defective and was fixed in the original migration, in place.** The integration suite's "a non-recount row carrying `counted_quantity` is rejected" assertion (plan Phase 2 §3) failed: an `adjustment` carrying only `counted_quantity` was **accepted**.
+
+   ```sql
+   check ((event_type = 'recount') = (counted_quantity is not null and projected_quantity is not null))
+   ```
+
+   For a non-recount carrying **one** stray field, LHS is `false` and RHS is `false`, so the CHECK passes — it only rejects a non-recount carrying **both**. This is the identical defect shape as Phase 1 deviation 2 (the liquid CHECK); that one was rewritten as a `CASE` at the time, this one was not, and **Phase 2's pgTAP only ever asserted the both-fields case** (`supply_ledger.test.sql:89-95`), so it passed.
+
+   Fixed with a `CASE` mirroring the liquid constraint. Two pgTAP assertions added for the one-field cases in each direction; plan count 12 → 14, suite total 55 → 57. Amending the migration rather than adding a follow-up was chosen at the author's decision when the mismatch gate ran — **the migration had not been pushed to any remote** (Phase 5 had not run), so it exists only locally and the schema's first state stays one reviewable file. **Phase 5 is now the first application of the corrected constraint.**
+
+   Worth carrying forward: the boolean-equality form of a presence constraint is wrong in exactly this way every time. Both occurrences were caught by a test asserting the _partially_-populated case, and neither by one asserting the fully-populated case.
+
+2. **The test client helper refuses a non-local `SUPABASE_URL`** (`tests/integration/helpers/client.ts`) — not in the plan's contract. The suite signs up users and writes rows; run against cloud credentials it would create junk accounts in production `medcalc`. Relevant because Phase 5 restores the cloud values into `.env`, after which `npm test` fails fast instead of polluting production.
+3. **`CLAUDE.md` → `## Supabase` also updated.** Its "No migrations exist yet" line was stale in the same way as the Vitest line the plan asked to remove; it now describes `supabase/migrations/`, `db:reset`, and `db:types`.
+4. **Vitest 4.1.10** installed (`vite ^7.3.2` override already present). Config loads `.env` via Vite's `loadEnv` with an empty prefix, since `SUPABASE_URL` / `SUPABASE_KEY` carry no `VITE_` prefix.
 
 ### Files committed in Phase 1 (`cc2cdaa`)
 
