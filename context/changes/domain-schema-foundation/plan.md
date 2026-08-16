@@ -650,14 +650,14 @@ Folding the liquid fields onto `medications` also removes a join from every dash
 
 #### Automated
 
-- [x] 4.1 `npm test` passes against a running local Supabase stack
-- [x] 4.2 `npm run lint` passes on the new test files
-- [x] 4.3 `npm run build` still succeeds
+- [x] 4.1 `npm test` passes against a running local Supabase stack — af117c3
+- [x] 4.2 `npm run lint` passes on the new test files — af117c3
+- [x] 4.3 `npm run build` still succeeds — af117c3
 
 #### Manual
 
-- [x] 4.4 `CLAUDE.md` testing commands run as written
-- [x] 4.5 Domain schema section is specific enough to prevent a cached-column regression
+- [x] 4.4 `CLAUDE.md` testing commands run as written — af117c3
+- [x] 4.5 Domain schema section is specific enough to prevent a cached-column regression — af117c3
 
 ### Phase 5: Push to Supabase Cloud
 

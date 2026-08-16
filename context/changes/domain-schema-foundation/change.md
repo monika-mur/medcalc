@@ -35,9 +35,9 @@ Rationale in full: `plan.md` → "Decided: no procedural database code". Prompte
 
 ---
 
-## Implementation status — paused after Phase 3, 2026-08-14
+## Implementation status — paused before Phase 5, 2026-08-16
 
-**Phases 1–3 are fully verified and committed.** Phases 4 and 5 are not started.
+**Phases 1–4 are fully verified and committed.** Phase 5 is not started; it is blocked on two interactive credentials only the author can supply.
 
 ### Where the run stands
 
@@ -46,16 +46,51 @@ Rationale in full: `plan.md` → "Decided: no procedural database code". Prompte
 | 1 — Domain schema migration         | Automated 1.1–1.9 ✅ · Manual 1.10–1.11 ✅ · `cc2cdaa` |
 | 2 — pgTAP database tests            | Automated 2.1–2.3 ✅ · Manual 2.4–2.5 ✅ · `1322caa`   |
 | 3 — Typed client + timezone capture | Automated 3.1–3.4 ✅ · Manual 3.5–3.7 ✅ · `85039ad`   |
-| 4 — Vitest suite + docs             | not started                                            |
-| 5 — Push to Supabase Cloud          | not started                                            |
+| 4 — Vitest suite + docs             | Automated 4.1–4.3 ✅ · Manual 4.4–4.5 ✅ · `af117c3`   |
+| 5 — Push to Supabase Cloud          | **not started — blocked on CLI auth + DB password**    |
 
-`plan.md` → `## Progress` is the canonical checkbox state and is up to date; every Phase 1–3 row carries its phase's SHA. The working tree is clean apart from the Phase 3 SHA write-back and this section, which the next phase's commit will absorb.
+`plan.md` → `## Progress` is the canonical checkbox state and is up to date; every Phase 1–4 row carries its phase's SHA.
+
+Suite totals at the pause: **pgTAP 57 assertions across 4 files** (`npm run db:test`), **Vitest 15 tests in 1 file** (`npm test`). Both green against a clean `npm run db:reset`.
+
+### Resuming Phase 5 — the two blocking steps
+
+Neither can be run non-interactively, which is why the run stopped here rather than mid-push. Run both yourself first, then re-enter the phase:
+
+1. **Authenticate the CLI** — opens a browser, or accepts a personal access token pasted from the Supabase dashboard:
+
+   ```
+   NODE_TLS_REJECT_UNAUTHORIZED=0 npx supabase login
+   ```
+
+   Verified absent at the pause: no `SUPABASE_ACCESS_TOKEN` in the environment and no `~/.supabase/access-token` (only `telemetry.json`).
+
+2. **Link to the cloud project** — prompts for the **database password** set at project creation (`deploy-plan.md` → Krok 0, step 2). That password is what `db push` connects with; it is not the anon key and is not in the repo.
+
+   ```
+   NODE_TLS_REJECT_UNAUTHORIZED=0 npx supabase link --project-ref nkqbiphgoemmehflgogz
+   ```
+
+   **Confirm the ref before running.** `nkqbiphgoemmehflgogz` was read off `SUPABASE_URL` in `.env.example`, which is the same file flagged below as holding real cloud values — it has not been cross-checked against the dashboard.
+
+   `supabase/.temp/` held only `cli-latest` at the pause, so the project is not currently linked.
+
+After both succeed, `npx supabase migration list` (read-only) is the next command — it should show the remote with **no migrations and no drift**, which is criterion 5.1. Only then `npx supabase db push`.
+
+### What Phase 5 will apply
+
+One migration, `20260813185255_domain_schema.sql`, **including the `supply_events` CHECK correction made during Phase 4** (see "Phase 4 deviations" below). The cloud project has never received this migration, so it lands in its corrected form directly — there is no intermediate state to reconcile and no follow-up migration to sequence.
+
+The migration creates objects and writes no rows, and touches nothing under `auth`, so the account already registered against the cloud project is unaffected.
 
 ### Environment left behind (read before resuming)
 
-- **`.env` and `.dev.vars` point at the LOCAL stack**, not the cloud project. Switched deliberately for the Phase 3 manual checks so test signups would not land in production `medcalc`. Phase 4's Vitest suite wants exactly this, so it is left as-is. The original cloud values are backed up **outside the repo** at `%TEMP%\medcalc-env-backup\` (`C:\Users\<user>\AppData\Local\Temp\medcalc-env-backup\`) — restore them before any deploy work. They are also recoverable from the committed `.env.example`.
-- **Docker Desktop and the local Supabase stack must be restarted after a reboot** — see "Environment prerequisites" below.
-- **Seven throwaway accounts exist in the LOCAL database only** (from signup verification). `npm run db:reset` clears them; nothing reached the cloud project.
+- **`.env` and `.dev.vars` point at the LOCAL stack**, not the cloud project. Switched deliberately for the Phase 3 manual checks so test signups would not land in production `medcalc`, and left that way because Phase 4's Vitest suite wants exactly this. The original cloud values are backed up **outside the repo** at `%TEMP%\medcalc-env-backup\` (`C:\Users\<user>\AppData\Local\Temp\medcalc-env-backup\`); they are also recoverable from the committed `.env.example`.
+  - **The push itself does not need them** — the CLI uses its own linked connection, not `.env`.
+  - **Criteria 5.5 / 5.6 do**, since they check the deployed app.
+  - **Restoring them makes `npm test` fail fast by design** — the Phase 4 helper refuses a non-local `SUPABASE_URL`. That is the guardrail working, not a regression; switch back to local values to run the suite again.
+- **Docker Desktop and the local Supabase stack must be restarted after a reboot** — see "Environment prerequisites" below. Docker was not running at the start of the Phase 4 session either.
+- **Throwaway accounts exist in the LOCAL database only** — seven from Phase 3 signup verification, plus two per `npm test` run (`alice-…@medcalc.test`, `bob-…@medcalc.test`, unique per run so repeat runs never collide). `npm run db:reset` clears them all; nothing has reached the cloud project.
 
 ### Phase 3 deviations
 
@@ -71,10 +106,12 @@ The Phase 1 commit bundles the whole `.claude/` toolkit, `context/foundation/roa
 ### Resume with
 
 ```
-/10x-implement domain-schema-foundation phase 4
+/10x-implement domain-schema-foundation phase 5
 ```
 
-It will pick up at **4.1** — installing Vitest, the `tests/integration/` suite against the local stack, and the `CLAUDE.md` testing + domain-schema sections. Phase 4 needs the local Supabase stack running; Phase 5 additionally needs the cloud project linked and the `.env` values restored.
+It will pick up at **5.1** — `migration list` for the drift check, then `db push`, then recording the applied-migration details in `## Notes`. **Run the two blocking steps above first** (`supabase login`, `supabase link`); without them the phase stops at the same place it stopped this time.
+
+Phase 5 does not need the local stack running. It is the only phase in the plan that mutates production.
 
 ### Environment prerequisites (must be re-done after any reboot)
 
