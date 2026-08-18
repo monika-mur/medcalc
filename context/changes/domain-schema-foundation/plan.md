@@ -663,13 +663,13 @@ Folding the liquid fields onto `medications` also removes a join from every dash
 
 #### Automated
 
-- [ ] 5.1 `npx supabase migration list` shows no remote drift before the push
-- [ ] 5.2 `npx supabase db push` exits 0
-- [ ] 5.3 `npx supabase migration list` shows local and remote in sync
+- [x] 5.1 `npx supabase migration list` shows no remote drift before the push
+- [x] 5.2 `npx supabase db push` exits 0
+- [x] 5.3 `npx supabase migration list` shows local and remote in sync
 
 #### Manual
 
-- [ ] 5.4 Studio on the cloud project shows all five tables with RLS enabled and no `public` functions or triggers
-- [ ] 5.5 Signing in to the deployed app still works
-- [ ] 5.6 A signed-out `select` against `medications` returns zero rows, not data
-- [ ] 5.7 Migration filename, date applied, and project ref recorded in `change.md`
+- [x] 5.4 Studio on the cloud project shows all five tables with RLS enabled and no `public` functions or triggers
+- [x] 5.5 Signing in to the deployed app still works
+- [x] 5.6 A signed-out `select` against `medications` returns zero rows, not data
+- [x] 5.7 Migration filename, date applied, and project ref recorded in `change.md`
