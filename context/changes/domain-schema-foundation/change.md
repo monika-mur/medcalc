@@ -1,7 +1,7 @@
 ---
 change_id: domain-schema-foundation
 title: Domain schema for specialists, medications, dosage-change history, and visits
-status: implementing
+status: implemented
 created: 2026-08-10
 updated: 2026-08-18
 archived_at: null
