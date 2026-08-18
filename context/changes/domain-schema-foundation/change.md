@@ -3,7 +3,7 @@ change_id: domain-schema-foundation
 title: Domain schema for specialists, medications, dosage-change history, and visits
 status: implementing
 created: 2026-08-10
-updated: 2026-08-16
+updated: 2026-08-18
 archived_at: null
 ---
 
@@ -35,19 +35,21 @@ Rationale in full: `plan.md` → "Decided: no procedural database code". Prompte
 
 ---
 
-## Implementation status — paused before Phase 5, 2026-08-16
+## Implementation status
 
-**Phases 1–4 are fully verified and committed.** Phase 5 is not started; it is blocked on two interactive credentials only the author can supply.
+**All five phases are implemented.** Phases 1–4 were verified and committed on 2026-08-16; Phase 5 pushed the migration to Supabase Cloud on 2026-08-18 — see "Phase 5 — applied to Supabase Cloud" at the end of this file.
+
+The run paused between Phase 4 and Phase 5 for two interactive credentials only the author could supply. That pause is over; the "Resuming Phase 5" section below is retained as a record of what unblocked it.
 
 ### Where the run stands
 
-| Phase                               | State                                                  |
-| ----------------------------------- | ------------------------------------------------------ |
-| 1 — Domain schema migration         | Automated 1.1–1.9 ✅ · Manual 1.10–1.11 ✅ · `cc2cdaa` |
-| 2 — pgTAP database tests            | Automated 2.1–2.3 ✅ · Manual 2.4–2.5 ✅ · `1322caa`   |
-| 3 — Typed client + timezone capture | Automated 3.1–3.4 ✅ · Manual 3.5–3.7 ✅ · `85039ad`   |
-| 4 — Vitest suite + docs             | Automated 4.1–4.3 ✅ · Manual 4.4–4.5 ✅ · `af117c3`   |
-| 5 — Push to Supabase Cloud          | **not started — blocked on CLI auth + DB password**    |
+| Phase                               | State                                                      |
+| ----------------------------------- | ---------------------------------------------------------- |
+| 1 — Domain schema migration         | Automated 1.1–1.9 ✅ · Manual 1.10–1.11 ✅ · `cc2cdaa`     |
+| 2 — pgTAP database tests            | Automated 2.1–2.3 ✅ · Manual 2.4–2.5 ✅ · `1322caa`       |
+| 3 — Typed client + timezone capture | Automated 3.1–3.4 ✅ · Manual 3.5–3.7 ✅ · `85039ad`       |
+| 4 — Vitest suite + docs             | Automated 4.1–4.3 ✅ · Manual 4.4–4.5 ✅ · `af117c3`       |
+| 5 — Push to Supabase Cloud          | Automated 5.1–5.3 ✅ · Manual 5.4–5.7 — applied 2026-08-18 |
 
 `plan.md` → `## Progress` is the canonical checkbox state and is up to date; every Phase 1–4 row carries its phase's SHA.
 
@@ -179,3 +181,25 @@ Belonging to this change:
 Unrelated, pre-existing at session start, folded in at the author's request: `.env.example`, `CLAUDE.md`, `context/deployment/deploy-plan.md`, `src/layouts/Layout.astro`, `src/lib/supabase.ts`, `.claude/{prompts,skills}/**`, `.claude/.10x-cli-manifest.json`, `context/foundation/roadmap-{github,linear}.md`.
 
 59 files, 12,664 insertions. The working tree was clean after the commit.
+
+### Phase 5 — applied to Supabase Cloud (2026-08-18)
+
+| Field        | Value                                                  |
+| ------------ | ------------------------------------------------------ |
+| Migration    | `supabase/migrations/20260813185255_domain_schema.sql` |
+| Date applied | 2026-08-18                                             |
+| Project ref  | `nkqbiphgoemmehflgogz`                                 |
+| Project name | `medcalc`                                              |
+| Org ID       | `xxestqjycsqjoptdaoyg`                                 |
+| Region       | Central EU (Frankfurt)                                 |
+| CLI version  | supabase 2.98.2                                        |
+
+**The project ref is now cross-checked.** The pause note flagged `nkqbiphgoemmehflgogz` as read off `.env.example` and never verified. `supabase projects list` confirms it is project `medcalc`, and it is the only project on the account — so the ref was correct and the warning is discharged.
+
+**What was applied.** One migration, in the corrected form carrying the Phase 4 `supply_events` CASE fix. The remote had no migrations and no drift beforehand (`migration list` showed an empty Remote column), so there was no intermediate state to reconcile; afterwards Local and Remote both read `20260813185255`.
+
+**Pre-push state, git-verified.** The working tree was clean and `supabase/migrations/` was unchanged since `af117c3`, the Phase 4 commit — so the bytes pushed are exactly the bytes that passed 57 pgTAP assertions and 15 Vitest tests. The local suite was **not** re-run before the push (Docker was down); this was an explicit author decision on the grounds that re-running re-tests an artifact git proves identical.
+
+**Credentials used, and the follow-up they created.** `supabase login --token` was used because the browser flow refuses a non-TTY shell. **That personal access token was pasted into the session transcript and the shell history, and should be revoked** at Account Settings → Access Tokens. The database password was supplied interactively to `supabase link` and does not appear in the repo or the transcript.
+
+**Environment unchanged by this phase.** `.env` and `.dev.vars` still point at the LOCAL stack. The push used the CLI's own linked connection, not `.env`. Criteria 5.5 and 5.6 exercise the **deployed** app, so they need no local env change either — but restoring the cloud values for any local dev work will make `npm test` fail fast by design (the Phase 4 helper refuses a non-local `SUPABASE_URL`).
