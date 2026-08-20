@@ -1,9 +1,9 @@
 ---
 change_id: domain-schema-foundation
 title: Domain schema for specialists, medications, dosage-change history, and visits
-status: implemented
+status: impl_reviewed
 created: 2026-08-10
-updated: 2026-08-18
+updated: 2026-08-20
 archived_at: null
 ---
 
@@ -103,7 +103,7 @@ The migration creates objects and writes no rows, and touches nothing under `aut
 
 The Phase 1 commit bundles the whole `.claude/` toolkit, `context/foundation/roadmap*.md`, and five pre-existing dirty files alongside the phase's own set — included deliberately at the author's request when the dirty-path gate ran, and enumerated in the commit body.
 
-**Open follow-up, not blocking:** `.env.example` holds the real cloud project URL and a **legacy JWT anon key** (it previously held an `sb_publishable_…` key — the uncommitted edit regressed it). Both values are now in history on a public remote. Exposure is bounded because every RLS policy targets `authenticated`, so `anon` reads nothing once Phase 5 lands — criterion 5.6 is the check for that. Replacing both with placeholders deserves its own commit.
+**~~Open follow-up~~ — RESOLVED 2026-08-20.** `.env.example` held the real cloud project URL and a **legacy JWT anon key** (it previously held an `sb_publishable_…` key — the uncommitted edit regressed it). Both values remain in history on a public remote at `7eac849` and `cc2cdaa`, but **both keys are now revoked and verified returning `401`**; the file itself carries local-stack placeholders. Full close-out in `reviews/impl-review.md` → F1.
 
 ### Resume with
 
@@ -200,6 +200,8 @@ Unrelated, pre-existing at session start, folded in at the author's request: `.e
 
 **Pre-push state, git-verified.** The working tree was clean and `supabase/migrations/` was unchanged since `af117c3`, the Phase 4 commit — so the bytes pushed are exactly the bytes that passed 57 pgTAP assertions and 15 Vitest tests. The local suite was **not** re-run before the push (Docker was down); this was an explicit author decision on the grounds that re-running re-tests an artifact git proves identical.
 
-**Credentials used, and the follow-up they created.** `supabase login --token` was used because the browser flow refuses a non-TTY shell. **That personal access token was pasted into the session transcript and the shell history, and should be revoked** at Account Settings → Access Tokens. The database password was supplied interactively to `supabase link` and does not appear in the repo or the transcript.
+**Credentials used, and the follow-up they created.** `supabase login --token` was used because the browser flow refuses a non-TTY shell. That personal access token was pasted into the session transcript and the shell history — **revoked and replaced 2026-08-20**, with the local copy cleared via `supabase logout`. The database password was supplied interactively to `supabase link` and does not appear in the repo or the transcript.
+
+Do not repeat the `--token` form: it puts the secret in argv, which is what leaked it. Use `npx supabase login` in a real terminal, or `$env:SUPABASE_ACCESS_TOKEN = Read-Host "PAT"` so the value is never typed as part of a command.
 
 **Environment unchanged by this phase.** `.env` and `.dev.vars` still point at the LOCAL stack. The push used the CLI's own linked connection, not `.env`. Criteria 5.5 and 5.6 exercise the **deployed** app, so they need no local env change either — but restoring the cloud values for any local dev work will make `npm test` fail fast by design (the Phase 4 helper refuses a non-local `SUPABASE_URL`).

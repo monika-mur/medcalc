@@ -4,11 +4,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
-- Deploy to Cloudflare Workers: `npm run build && NODE_TLS_REJECT_UNAUTHORIZED=0 npx wrangler deploy --config dist/server/wrangler.json`
+**The shell here is PowerShell, which has no `VAR=value command` prefix.** Behind the corporate TLS-intercepting proxy, any command that reaches Supabase or Cloudflare needs `NODE_TLS_REJECT_UNAUTHORIZED=0` — set it as its own statement, once per session, not as a prefix:
+
+```powershell
+$env:NODE_TLS_REJECT_UNAUTHORIZED = "0"
+```
+
+It then applies to every command in that session. Needed for `supabase login｜link｜db push｜migration list` and `wrangler deploy｜secret put`; not for purely local commands (`supabase logout`, `npm run lint`). Write commands for PowerShell when handing them to a developer — the bash prefix form works in Git Bash and CI, which is why it keeps getting written by mistake.
+
+**The same proxy breaks other tools, each with its own flag** — `NODE_TLS_REJECT_UNAUTHORIZED` only reaches Node. `curl` needs `-k`; without it a perfectly healthy endpoint returns `HTTP 000` and reads as "unreachable" rather than as a TLS failure. Confirmed against the deployed Worker: `curl https://medcalc.medcalc.workers.dev` → `000`, `curl -k` → `200`. Before concluding a host is down, retry with the tool's insecure flag.
+
+- Deploy to Cloudflare Workers: `npm run build && npx wrangler deploy --config dist/server/wrangler.json` (with the env var set as above)
+- Deployed app: `https://medcalc.medcalc.workers.dev` (account subdomain `medcalc`, worker `medcalc`). The `medcalc-preview` environment in `wrangler.jsonc` has never been deployed — `ci.yml` only fires it on pull requests.
 
 ## Environment setup
 
-Copy `.env.example` to both `.env` and `.dev.vars`.
+Copy `.env.example` to both `.env` and `.dev.vars`, then fill in real values — `.env.example` ships placeholders, never live credentials.
 
 Wrangler reads `.dev.vars` (not `.env`) for runtime secrets during `npm run dev`. Both files must exist locally for the dev server to work correctly.
 
@@ -56,6 +67,7 @@ Wrangler reads `.dev.vars` (not `.env`) for runtime secrets during `npm run dev`
 - **`supply_events` is append-only, and `dosage_changes` is immutable once effective** (deletable only while `effective_date > current_date`). Corrections are new rows — an `adjustment` event, or a later dosage change — never an UPDATE.
 - **`medications` cannot be deleted** by policy; archival is `archived_at` (FR-007). Under RLS a DELETE with no policy matches zero rows rather than raising, so tests assert the row survives.
 - **The schema carries no triggers, no database functions, and no RPC by design.** New invariants belong in CHECK / FK / UNIQUE / RLS. Reaching for a trigger or an RPC is a signal to re-plan, not to write one — the no-procedural-code property is asserted as a test.
+- **`updated_at` has no maintainer and is client-writable.** `default now()` fires on INSERT only and no trigger or application code touches it, so it currently equals `created_at` on every row. The UPDATE policies constrain no columns and `database.types.ts` exposes it on both `Insert` and `Update`, so a client can set it to any value — including the past. Whoever gives it a maintainer (S-01) must pair the write path with a `check (updated_at >= created_at)`; the application setting it on every write is not enforcement on its own.
 - **A recount insert must supply `quantity_delta` itself**, alongside `counted_quantity` and `projected_quantity`. Nothing computes it server-side; a CHECK holds `quantity_delta = counted_quantity − projected_quantity` and rejects a row where the three disagree. The discrepancy signal is `quantity_delta <> 0` on a recount row.
 - **The liquid sub-type is nullable columns on `medications`** (`container_capacity`, `estimated_daily_consumption`, `post_opening_expiry_days`, `opened_on`) guarded by a CHECK, so creating one is a single insert. A second sub-type is the signal to revisit that — not a reason to add nullable columns for it.
 - **`daily_dosage = 0` means "stopped, keep the history"** and is distinct from archival, which hides the medication. A medication with no `dosage_changes` rows reads as dosage 0; one with no `supply_events` rows reads as quantity 0. Both are legal states, which is what makes a partial multi-statement create harmless.

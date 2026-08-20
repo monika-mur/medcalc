@@ -14,9 +14,10 @@ export function getMissingConfigs(): ConfigStatus[] {
     {
       name: "Supabase",
       configured: Boolean(SUPABASE_URL && SUPABASE_KEY),
-      // SUPABASE_KEY is deliberately NOT interpolated here: astro.config.mjs declares it
-      // `access: "secret"`, and this message renders in the UI.
-      message: `Supabase nie jest skonfigurowany — funkcje uwierzytelniania są wyłączone. SUPABASE_URL: ${SUPABASE_URL ?? "(nie ustawiony)"}`,
+      // Neither value is interpolated here: astro.config.mjs declares both
+      // `access: "secret"`, and this message renders in the public UI. The status
+      // only reports presence — the developer already knows their own URL.
+      message: `Supabase nie jest skonfigurowany — funkcje uwierzytelniania są wyłączone. SUPABASE_URL: ${SUPABASE_URL ? "ustawiony" : "nie ustawiony"}`,
       docsUrl: "https://github.com/przeprogramowani/10x-astro-starter#supabase-configuration",
       docsLabel: "Zobacz instrukcję konfiguracji",
     },

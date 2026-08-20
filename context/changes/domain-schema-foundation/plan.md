@@ -46,6 +46,8 @@ At that point S-01 can begin without inventing any schema.
 - **No trigger functions, no `SECURITY DEFINER`, and no Postgres RPC functions.** See "Decided: no procedural database code". RPC (`supabase.rpc()`) is named explicitly so it is not reconsidered as a substitute: it would make the three-statement medication create atomic, but it is _more_ procedural database code than the triggers it would replace, and the zero-dosage read semantics (see "Zero dosage and the multi-statement create") make a partial create a legal state rather than a broken one — which is the cheaper way to buy the same safety. **This is the decision most worth revisiting if partial creates turn out to be common in practice**, and S-02 is where that evidence will first appear.
 - **No `profiles` table.** The only field it would carry in v1 is `timezone`, which lives in `auth.users.raw_user_meta_data`. See Phase 3.
 
+**Addendum (2026-08-20, from impl-review F7).** Five files outside _Changes Required_ were edited during implementation and are in scope despite not being planned here: `.prettierrc.json` and `eslint.config.js` (unblocking a lint gate criteria 3.3/4.2 depend on), `src/lib/config-status.ts` and `src/layouts/Layout.astro` (removing a secret leak and following the export-shape change), and `.env.example`. Each is documented with its rationale in `change.md` → _Deviations_; this pointer exists so the plan reads as a complete contract on its own.
+
 ## Implementation Approach
 
 Five tables, one migration, four principles:
