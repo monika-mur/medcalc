@@ -2,9 +2,24 @@ import type { APIRoute } from "astro";
 import { createClient } from "@/lib/supabase";
 
 export const POST: APIRoute = async (context) => {
-  const form = await context.request.formData();
-  const email = form.get("email") as string;
-  const password = form.get("password") as string;
+  // `formData()` rejects on an absent, truncated, or non-form body. Without this
+  // guard a non-form POST yields a raw 500 instead of the redirect-with-message
+  // pattern every other failure path in this route uses.
+  let form: FormData;
+  try {
+    form = await context.request.formData();
+  } catch {
+    return context.redirect(`/auth/signin?error=${encodeURIComponent("Invalid form submission")}`);
+  }
+
+  // `FormData.get` returns `string | File | null`, so these are narrowed rather
+  // than cast — a POST omitting a field would otherwise pass `null` into
+  // `signInWithPassword`.
+  const email = form.get("email");
+  const password = form.get("password");
+  if (typeof email !== "string" || typeof password !== "string") {
+    return context.redirect(`/auth/signin?error=${encodeURIComponent("Email and password are required")}`);
+  }
 
   const supabase = createClient(context.request.headers, context.cookies);
   if (!supabase) {
