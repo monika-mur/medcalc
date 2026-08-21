@@ -52,7 +52,7 @@ Verify by: signing in, exercising add/edit/delete against a seeded medication, w
 - **No account-erasure work (F3).** It stays queued in `domain-schema-foundation/follow-ups/review-fixes.md`; it needs a local-stack rehearsal and it interacts with the delete guard decided here.
 - **No component-test harness.** No `@testing-library/react`, no jsdom. The island's branching logic is covered by manual verification only — recorded as an accepted gap, not an oversight.
 - **No mirrored (per-table) grants.** Phase 1 grants all four DML privileges uniformly. Restricting them to match each table's policy set is strictly stronger, but it turns "zero rows affected" into `42501` and so requires rewriting `append_only.test.sql`, amending `CLAUDE.md`'s documented zero-rows rule, and revisiting Phase 3's error mapping. That is a real hardening change with its own blast radius, queued in `follow-ups/review-fixes.md` → S-05 — not a rider on a toolchain bump.
-- **No cloud grant reconciliation.** Cloud is expected to still carry the old permissive default and therefore still work. Confirming that, and pushing the grant migration, is a deliberate manual step outside this plan — same boundary as every other cloud push here.
+- **No cloud _writes_ of any kind.** Phase 1 does read-only reconnaissance against cloud — one `select` confirming its grants match what the migration will assert — because that read is what makes the eventual push a known no-op instead of a hope. Pushing the migration, and reconciling cloud if the read comes back wrong, both stay deliberate manual steps outside this plan, same boundary as every other cloud push here.
 - **No CI changes.** Review finding F9 (CI gates neither suite, deploys to production on push) stays queued as its own change.
 - **No migration push to cloud.** Phase 1's migration stays local. Pushing is a deliberate manual step, consistent with F-01's decision and `infrastructure.md:91`.
 - **No dark mode.** The `.dark` token block in `global.css:41-73` stays dead — nothing in the repo sets `class="dark"` and no toggle is built. It is left in place rather than deleted (that would diverge from shadcn's expected file shape for no gain), but only `:root` is live. A future slice wanting dark mode starts by populating that block, not by discovering it half-done.
@@ -191,7 +191,39 @@ This is a latent defect in F-01, not a consequence of the CLI upgrade — the up
 
 - In Studio, an UPDATE setting `updated_at` before `created_at` is rejected on each of the three tables
 - `authenticated` holds SELECT/INSERT/UPDATE/DELETE on all five domain tables and `anon` holds none, confirmed by querying `information_schema.role_table_grants` after a clean reset
+- **The same query run against the cloud project returns the same five rows.** This is read-only reconnaissance, not a push — see "Verifying cloud" below for why it belongs in this phase and what a mismatch means
 - `npx supabase migration list` shows the new migration as local-only — this slice does not push to cloud
+
+### Verifying cloud
+
+The grants are the first change in this slice whose correct behaviour differs by environment, so the assumption behind them gets checked rather than carried. Locally they **restore** access a newer Postgres image withdrew. On cloud they are expected to be a **no-op**: that project was created under the older permissive default, already holds the same privileges, and `GRANT` is idempotent.
+
+That expectation is currently unverified, and it is load-bearing — it is the reason this migration is safe to push later without a maintenance window. Verify it in this phase, while the migration is fresh and nothing depends on it yet, rather than at push time when the cost of being wrong is highest.
+
+Run in the cloud project's SQL Editor (dashboard → SQL Editor), which needs no local credential wiring:
+
+```sql
+select table_name,
+       string_agg(privilege_type, ', ' order by privilege_type) as privs
+from information_schema.role_table_grants
+where table_schema = 'public'
+  and grantee = 'authenticated'
+  and privilege_type in ('SELECT', 'INSERT', 'UPDATE', 'DELETE')
+group by table_name
+order by table_name;
+```
+
+Expect five rows, each reading `DELETE, INSERT, SELECT, UPDATE`. Interpret the result as follows:
+
+- **Five complete rows** — the assumption holds. The migration is a no-op on cloud and can be pushed whenever the slice ships. Record the date checked in `change.md`; a platform default can change again.
+- **Missing rows or missing privileges** — cloud is already broken in the same way local was, and the live app is running on borrowed privileges that could disappear at any time. **Stop and re-plan the push**: it becomes a fix with urgency rather than a no-op, and it should go out on its own rather than waiting behind four phases of UI work.
+- **Extra grants, or grants to `anon`** — something outside these migrations touched the cloud schema. Do not paper over it with a migration; find out what did it first.
+
+If you prefer the CLI to the dashboard, remember the proxy and the shell (`lessons.md` → _Write shell commands for PowerShell_) — set the variable as its own statement, never as a prefix:
+
+```powershell
+$env:NODE_TLS_REJECT_UNAUTHORIZED = "0"
+```
 
 **Implementation Note**: After completing this phase and all automated verification passes, pause here for manual confirmation before proceeding.
 
@@ -539,7 +571,8 @@ Rollback within a phase is `npm run db:reset`. Once pushed, the `updated_at` CHE
 
 - [ ] 1.6 Studio rejects an UPDATE setting `updated_at` before `created_at` on each of the three tables
 - [ ] 1.7 `authenticated` holds all four DML privileges on all five tables and `anon` holds none, after a clean reset
-- [ ] 1.8 `npx supabase migration list` shows the new migration as local-only
+- [ ] 1.8 The same grant query against the cloud project returns five complete rows — result and date recorded in `change.md`
+- [ ] 1.9 `npx supabase migration list` shows the new migration as local-only
 
 ### Phase 2: Design system — primitives and auth restyle
 

@@ -54,4 +54,8 @@ This is a latent F-01 defect, not a CLI regression — the schema had always dep
 
 Resolved by adding uniform `GRANT`s to Phase 1's migration, verified at 57/57 against a live stack. The stronger per-table mirrored set was also measured (44/57 — it breaks `append_only.test.sql`, whose header explicitly documents the zero-rows semantics it depends on) and is queued as **S-05** in `domain-schema-foundation/follow-ups/review-fixes.md`.
 
-**Open:** cloud is expected to still carry the old permissive grants and therefore still work. Unverified — check `information_schema.role_table_grants` there before the next `db push`.
+**Open:** cloud is expected to still carry the old permissive grants and therefore still work. Unverified as of 2026-08-21. Phase 1 manual step 1.8 now performs that check as read-only reconnaissance and records the result here — the query and how to read each outcome are in `plan.md` → _Verifying cloud_.
+
+| Checked | Result                     |
+| ------- | -------------------------- |
+| —       | pending (Phase 1 step 1.8) |
