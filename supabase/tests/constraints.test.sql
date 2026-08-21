@@ -7,7 +7,7 @@ create extension if not exists pgtap with schema extensions;
 
 begin;
 
-select plan(15);
+select plan(18);
 
 insert into auth.users (id) values
   ('a0000000-0000-0000-0000-00000000000a'),
@@ -19,6 +19,9 @@ insert into public.specialists (id, user_id, name, specialty) values
 
 insert into public.medications (id, user_id, specialist_id, name, expiry_date) values
   ('d1000000-0000-0000-0000-00000000000a', 'a0000000-0000-0000-0000-00000000000a', '51000000-0000-0000-0000-00000000000a', 'Med A', '2027-01-01');
+
+insert into public.visits (id, user_id, specialist_id, visit_date) values
+  ('12000000-0000-0000-0000-00000000000a', 'a0000000-0000-0000-0000-00000000000a', '51000000-0000-0000-0000-00000000000a', '2026-02-01');
 
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated"}';
@@ -146,6 +149,41 @@ select throws_ok($$
     values ('d1000000-0000-0000-0000-00000000000a', -1, '2026-05-01')
   $$, '23514', null,
   'dosage_changes: a negative daily_dosage is rejected');
+
+-- ---------------------------------------------------------------------------
+-- updated_at may not precede created_at
+--
+-- The column has no trigger and no database-side maintainer: `default now()`
+-- fires on INSERT only, and the application writes it on every update. This
+-- CHECK is what makes that convention enforceable rather than merely intended.
+--
+-- It closes BACKDATING only. A client can still set updated_at forward, since
+-- the UPDATE policies constrain no columns and the generated types expose the
+-- field; that half is closed in the data module, which builds its update
+-- payload explicitly instead of spreading a request body.
+--
+-- 4-argument throws_ok with a null message: the 3-argument form matches its
+-- third argument against the raised message text, which silently passes for
+-- the wrong reason (recorded in domain-schema-foundation/change.md).
+-- ---------------------------------------------------------------------------
+
+select throws_ok($$
+    update public.specialists set updated_at = created_at - interval '1 second'
+    where id = '51000000-0000-0000-0000-00000000000a'
+  $$, '23514', null,
+  'specialists: updated_at cannot be set before created_at');
+
+select throws_ok($$
+    update public.medications set updated_at = created_at - interval '1 second'
+    where id = 'd1000000-0000-0000-0000-00000000000a'
+  $$, '23514', null,
+  'medications: updated_at cannot be set before created_at');
+
+select throws_ok($$
+    update public.visits set updated_at = created_at - interval '1 second'
+    where id = '12000000-0000-0000-0000-00000000000a'
+  $$, '23514', null,
+  'visits: updated_at cannot be set before created_at');
 
 select * from finish();
 

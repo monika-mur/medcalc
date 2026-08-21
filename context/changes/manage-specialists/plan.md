@@ -167,7 +167,11 @@ This is a latent defect in F-01, not a consequence of the CLI upgrade — the up
 
 **Intent**: Assert the grants exist, so the schema can never again silently depend on a platform default.
 
-**Contract**: Five assertions using pgTAP's `table_privs_are`, one per domain table, asserting `authenticated` holds exactly `{SELECT, INSERT, UPDATE, DELETE}`. Add one asserting `anon` holds none of the four on `specialists`. The point is not that DML is permitted — the other suites already prove that indirectly — but that the privilege is **stated by a migration** rather than inherited. That is precisely the property whose absence took the suite from 57/57 to 14/57 on an image bump, and nothing in the repo currently notices it. Bump the file's plan count from 15 to 21.
+**Contract**: Six assertions, one per domain table plus one for `anon`, placed **before** the `set local role authenticated` switch so they run as `postgres`. Each asserts, against `information_schema.role_table_grants` filtered to the four DML privileges, that `authenticated` holds `DELETE,INSERT,SELECT,UPDATE`; the sixth asserts `anon` holds none of the four on `specialists`. Bump the file's plan count from 15 to 21.
+
+The point is not that DML is permitted — the other suites already prove that indirectly — but that the privilege is **stated by a migration** rather than inherited. That is precisely the property whose absence took the suite from 57/57 to 14/57 on an image bump, and nothing in the repo previously noticed it.
+
+**Not `table_privs_are`**, which the first draft of this plan specified. That function asserts the **exact** privilege set, and `authenticated` also holds `REFERENCES`, `TRIGGER`, and `TRUNCATE` from the platform's default ACL — a probe with just the four DML fails with `Extra privileges: REFERENCES, TRIGGER, TRUNCATE`. Listing all seven to make it pass would hard-code the inherited default into the assertion, which is the exact dependency this phase exists to remove, and would break spuriously on the next image change. The filtered query also matches the manual-verification step and the cloud query verbatim, so the automated and manual checks cannot drift apart.
 
 #### 3. Regenerated types
 
@@ -561,11 +565,11 @@ Rollback within a phase is `npm run db:reset`. Once pushed, the `updated_at` CHE
 
 #### Automated
 
-- [ ] 1.1 Migration applies from scratch: `npm run db:reset`
-- [ ] 1.2 pgTAP passes at 66 assertions (57 + 3 CHECK + 6 grants): `npm run db:test`
-- [ ] 1.3 Grants survive a from-scratch reset: `npm run db:reset` then `npm run db:test` green with no manual GRANT in between
-- [ ] 1.4 Generated types are unchanged: `npm run db:types` leaves no diff
-- [ ] 1.5 Linting passes: `npm run lint`
+- [x] 1.1 Migration applies from scratch: `npm run db:reset`
+- [x] 1.2 pgTAP passes at 66 assertions (57 + 3 CHECK + 6 grants): `npm run db:test`
+- [x] 1.3 Grants survive a from-scratch reset: `npm run db:reset` then `npm run db:test` green with no manual GRANT in between
+- [x] 1.4 Generated types are unchanged: `npm run db:types` leaves no diff
+- [x] 1.5 Linting passes: `npm run lint`
 
 #### Manual
 
