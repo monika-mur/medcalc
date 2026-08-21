@@ -51,6 +51,8 @@ Verify by: signing in, exercising add/edit/delete against a seeded medication, w
 - **No soft delete or archival for specialists.** FR-007's archival requirement is scoped to medications. A specialist with nothing assigned carries no history worth preserving.
 - **No account-erasure work (F3).** It stays queued in `domain-schema-foundation/follow-ups/review-fixes.md`; it needs a local-stack rehearsal and it interacts with the delete guard decided here.
 - **No component-test harness.** No `@testing-library/react`, no jsdom. The island's branching logic is covered by manual verification only — recorded as an accepted gap, not an oversight.
+- **No mirrored (per-table) grants.** Phase 1 grants all four DML privileges uniformly. Restricting them to match each table's policy set is strictly stronger, but it turns "zero rows affected" into `42501` and so requires rewriting `append_only.test.sql`, amending `CLAUDE.md`'s documented zero-rows rule, and revisiting Phase 3's error mapping. That is a real hardening change with its own blast radius, queued in `follow-ups/review-fixes.md` → S-05 — not a rider on a toolchain bump.
+- **No cloud grant reconciliation.** Cloud is expected to still carry the old permissive default and therefore still work. Confirming that, and pushing the grant migration, is a deliberate manual step outside this plan — same boundary as every other cloud push here.
 - **No CI changes.** Review finding F9 (CI gates neither suite, deploys to production on push) stays queued as its own change.
 - **No migration push to cloud.** Phase 1's migration stays local. Pushing is a deliberate manual step, consistent with F-01's decision and `infrastructure.md:91`.
 - **No dark mode.** The `.dark` token block in `global.css:41-73` stays dead — nothing in the repo sets `class="dark"` and no toggle is built. It is left in place rather than deleted (that would diverge from shadcn's expected file shape for no gain), but only `:root` is live. A future slice wanting dark mode starts by populating that block, not by discovering it half-done.
@@ -102,35 +104,70 @@ The rule that keeps this consistent as S-02/S-03/S-04 are built: **green means "
 
 **The `.dark` block is out of scope.** Nothing toggles it and no dark mode is planned for the MVP. Leave the block in place and untouched rather than deleting it — deleting it is a change to shadcn's expected file shape that buys nothing. Note in the CLAUDE.md subsection (Phase 3) that only `:root` is live, so a future slice does not waste effort tuning dead tokens or assume dark mode works.
 
-## Phase 1: Schema — `updated_at` guard and F4 policy rewrite
+## Phase 1: Schema — explicit grants, `updated_at` guard, and F4 policy rewrite
 
 ### Overview
 
-One migration that settles the deferred `updated_at` decision and folds in review finding F4. Behaviour-neutral for F4; additive for the CHECK. No rows exist in any environment, so nothing can be rejected retroactively.
+One migration that makes the schema's table privileges explicit, settles the deferred `updated_at` decision, and folds in review finding F4. Behaviour-neutral for F4 and for the grants; additive for the CHECK. No rows exist in any environment, so nothing can be rejected retroactively.
+
+**Why grants are suddenly in scope.** `20260813185255_domain_schema.sql` issues no `GRANT` at all — verified by grep, where the only matches are two comments. It has always depended on the Supabase platform's historical default of granting DML on new `public` tables to `anon` and `authenticated`. That default changed. The Postgres image bundled with CLI 2.115.0 ships a restricted default ACL for the `postgres` role in `public`:
+
+```
+public | supabase_admin | r | authenticated=arwdDxtm   <- full DML
+public | postgres       | r | authenticated=Dxtm       <- no a/r/w/d
+```
+
+Migrations run as `postgres` and the five domain tables are owned by `postgres`, so on a freshly reset local stack they carry only `TRUNCATE, REFERENCES, TRIGGER, MAINTAIN` — and every table is unreachable to `authenticated`. pgTAP drops from 57/57 to 14/57 with `permission denied` on four of five tables. RLS policies do not grant privileges; a working table needs **both** a `GRANT` and a permissive policy, and this schema only ever had the second.
+
+This is a latent defect in F-01, not a consequence of the CLI upgrade — the upgrade only surfaced it, which is fortunate timing given S-01 is about to build a data module, four routes, and an integration suite on top. It also means **local and cloud have diverged**: the cloud project was created under the old permissive default and is expected to still work. That is unverified and worth checking before the next cloud push, but it is not this slice's job.
 
 ### Changes Required:
 
 #### 1. New migration
 
-**File**: `supabase/migrations/<timestamp>_updated_at_guard_and_rls_perf.sql` (create with `npx supabase migration new updated_at_guard_and_rls_perf`)
+**File**: `supabase/migrations/<timestamp>_grants_updated_at_guard_and_rls_perf.sql` (create with `npx supabase migration new grants_updated_at_guard_and_rls_perf`)
 
-**Intent**: Make `updated_at` unable to precede `created_at` on the three tables that carry it, and apply F4's performance rewrite while the policy set is small enough to change in one pass.
+**Intent**: Make the table privileges explicit rather than inherited, make `updated_at` unable to precede `created_at` on the three tables that carry it, and apply F4's performance rewrite while the policy set is small enough to change in one pass.
 
 **Contract**:
+
+- **Explicit `GRANT` of all four DML privileges on all five domain tables to `authenticated`**, and to `authenticated` only:
+
+  ```sql
+  grant select, insert, update, delete on public.specialists    to authenticated;
+  grant select, insert, update, delete on public.medications    to authenticated;
+  grant select, insert, update, delete on public.dosage_changes to authenticated;
+  grant select, insert, update, delete on public.supply_events  to authenticated;
+  grant select, insert, update, delete on public.visits         to authenticated;
+  ```
+
+  **No grants to `anon`.** The app has no anonymous data access — every policy is `to authenticated`, and an anonymous visitor reaching a domain table is a bug in the middleware, not a supported path. There are no sequences to grant (all primary keys are `gen_random_uuid()`).
+
+- **The grants are deliberately uniform, not mirrored to each table's policy set.** Restricting them per-table — `medications` without `DELETE`, `supply_events` without `UPDATE`/`DELETE` — is strictly stronger and was measured: it leaves pgTAP at 44/57. `append_only.test.sql` fails, and its header comment explains exactly why the design depends on the looser grant:
+
+  > a command with RLS enabled and NO policy is not an error. It matches zero rows and returns success. So every assertion below checks the AFFECTED ROW COUNT and the survival of the row — never that an exception was raised. Asserting `throws_ok` here would pass for the wrong reason.
+
+  Withholding the privilege turns "zero rows affected" into `42501 permission denied`, which changes the observable contract that the tests, `CLAUDE.md`, and Phase 3's error mapping all encode. The uniform set restores exactly the pre-existing documented behaviour and was verified at **57/57**. Tightening to mirrored grants is real hardening and is queued as its own change — see `follow-ups/review-fixes.md` → S-05. It does not ride along here as a side effect of a toolchain bump.
 
 - `check (updated_at >= created_at)` added to `specialists`, `medications`, and `visits`. Name each `<table>_updated_at_not_before_created_at`.
 - All 16 RLS policies rewritten from `auth.uid() = user_id` to `(select auth.uid()) = user_id`. There are **19** bare occurrences across `USING` and `WITH CHECK` clauses (`:266-314`) and zero wrapped ones. Use `alter policy` rather than drop-and-recreate so no window exists where a table is unprotected.
 - **The 5 `default auth.uid()` column clauses (`:37`, `:61`, `:133`, `:163`, `:210`) are deliberately excluded**, as are the 2 mentions in the header comment (`:13-14`). 26 occurrences exist in the file; only the 19 in policy predicates are in scope. A column default is evaluated once per inserted row regardless, so the initplan optimisation F4 is buying does not apply there — wrapping them would edit table DDL for no benefit. If a count of rewritten predicates comes out above 19, something outside the policy block was touched.
 - `create index dosage_changes_user_id_idx on public.dosage_changes (user_id)` and the same for `supply_events`. Both are currently indexed on `(medication_id, …)` only, while RLS injects a `user_id` predicate into every read.
-- Header comment stating that F4's rewrite is behaviour-identical and that the existing suites are the regression net.
+- Header comment stating that F4's rewrite is behaviour-identical, that the grants replace an inherited platform default rather than widening access, and that the existing suites are the regression net.
 
-#### 2. pgTAP coverage for the new constraint
+#### 2. pgTAP coverage for the new constraint and the grants
 
 **File**: `supabase/tests/constraints.test.sql`
 
 **Intent**: Assert the new CHECK rejects a backdated `updated_at`, at the layer that enforces it.
 
-**Contract**: Three `throws_ok` assertions with errcode `23514` — one per table — updating a seeded row to set `updated_at` earlier than `created_at`. Use the 4-argument form with a `null` message; the 3-argument form matches the third argument against the raised message, which is the trap recorded in `change.md` for `domain-schema-foundation`. Bump the file's plan count accordingly.
+**Contract**: Three `throws_ok` assertions with errcode `23514` — one per table — updating a seeded row to set `updated_at` earlier than `created_at`. Use the 4-argument form with a `null` message; the 3-argument form matches the third argument against the raised message, which is the trap recorded in `change.md` for `domain-schema-foundation`. Bump the file's plan count from 15 to 18.
+
+**File**: `supabase/tests/rls.test.sql`
+
+**Intent**: Assert the grants exist, so the schema can never again silently depend on a platform default.
+
+**Contract**: Five assertions using pgTAP's `table_privs_are`, one per domain table, asserting `authenticated` holds exactly `{SELECT, INSERT, UPDATE, DELETE}`. Add one asserting `anon` holds none of the four on `specialists`. The point is not that DML is permitted — the other suites already prove that indirectly — but that the privilege is **stated by a migration** rather than inherited. That is precisely the property whose absence took the suite from 57/57 to 14/57 on an image bump, and nothing in the repo currently notices it. Bump the file's plan count from 15 to 21.
 
 #### 3. Regenerated types
 
@@ -138,20 +175,22 @@ One migration that settles the deferred `updated_at` decision and folds in revie
 
 **Intent**: Keep the committed types in step with the schema.
 
-**Contract**: Regenerate with `npm run db:types`. A CHECK and an index change no generated types, so **this file is expected not to change** — a diff here means something unintended landed in the migration and should be investigated before proceeding.
+**Contract**: Regenerate with `npm run db:types`. A CHECK, an index, and a `GRANT` change no generated types, so **this file is expected not to change** — a diff here means something unintended landed in the migration and should be investigated before proceeding.
 
 ### Success Criteria:
 
 #### Automated Verification:
 
 - Migration applies from scratch: `npm run db:reset`
-- pgTAP passes including the three new assertions: `npm run db:test`
+- pgTAP passes at **66 assertions** — the prior 57 plus 3 for the CHECK and 6 for the grants: `npm run db:test`
+- **The grants survive a from-scratch reset**, which is the whole point: `npm run db:reset` followed immediately by `npm run db:test` must be green with no manual `GRANT` in between. The ad-hoc grants applied while diagnosing this are wiped by the reset, so a green run here proves the migration is carrying them
 - Generated types are unchanged: `npm run db:types` leaves `src/db/database.types.ts` with no diff
 - Linting passes: `npm run lint`
 
 #### Manual Verification:
 
 - In Studio, an UPDATE setting `updated_at` before `created_at` is rejected on each of the three tables
+- `authenticated` holds SELECT/INSERT/UPDATE/DELETE on all five domain tables and `anon` holds none, confirmed by querying `information_schema.role_table_grants` after a clean reset
 - `npx supabase migration list` shows the new migration as local-only — this slice does not push to cloud
 
 **Implementation Note**: After completing this phase and all automated verification passes, pause here for manual confirmation before proceeding.
@@ -430,7 +469,8 @@ Mark the active route with a green-700 underline or left border plus `aria-curre
 ### Database tests (`supabase/tests/`, pgTAP)
 
 - The three new `updated_at >= created_at` CHECKs, one assertion per table
-- Existing 57 assertions serve as the regression net for F4's behaviour-neutral policy rewrite
+- Six new grant assertions (`table_privs_are`): `authenticated` holds all four DML privileges on each of the five domain tables, and `anon` holds none on `specialists`
+- Existing 57 assertions serve as the regression net for F4's behaviour-neutral policy rewrite — and, as of the CLI 2.115.0 image bump, for the grants too: their collapse from 57/57 to 14/57 is what surfaced the missing `GRANT` in the first place
 
 ### Integration tests (`tests/integration/`, Vitest)
 
@@ -468,7 +508,9 @@ The list is server-rendered, so first paint costs one query and no client round 
 
 Phase 1's migration is additive and behaviour-neutral, and no rows exist in any environment, so nothing can be rejected retroactively. It stays **local** — pushing to cloud is a deliberate manual step outside this plan, consistent with F-01's decision and `infrastructure.md:91` (a Worker rollback does not roll back the database).
 
-Rollback within a phase is `npm run db:reset`. Once pushed, the `updated_at` CHECK would need a `drop constraint` migration to reverse; the F4 rewrite reverses by re-running `alter policy` with the unwrapped expression.
+The grants are the one part that is environment-sensitive rather than environment-neutral. Locally they **restore** access that a newer Postgres image withdrew. On cloud they are expected to be a no-op, because that project was created under the old permissive default and already holds the same privileges — `GRANT` is idempotent, so re-granting an existing privilege changes nothing. That expectation is unverified; check `information_schema.role_table_grants` on cloud before the push rather than assuming it, and treat a surprise there as a reason to stop rather than proceed.
+
+Rollback within a phase is `npm run db:reset`. Once pushed, the `updated_at` CHECK would need a `drop constraint` migration to reverse; the F4 rewrite reverses by re-running `alter policy` with the unwrapped expression; the grants reverse with the matching `revoke`, though doing so on cloud would break the running app, which is the point of them.
 
 ## References
 
@@ -488,14 +530,16 @@ Rollback within a phase is `npm run db:reset`. Once pushed, the `updated_at` CHE
 #### Automated
 
 - [ ] 1.1 Migration applies from scratch: `npm run db:reset`
-- [ ] 1.2 pgTAP passes including the three new assertions: `npm run db:test`
-- [ ] 1.3 Generated types are unchanged: `npm run db:types` leaves no diff
-- [ ] 1.4 Linting passes: `npm run lint`
+- [ ] 1.2 pgTAP passes at 66 assertions (57 + 3 CHECK + 6 grants): `npm run db:test`
+- [ ] 1.3 Grants survive a from-scratch reset: `npm run db:reset` then `npm run db:test` green with no manual GRANT in between
+- [ ] 1.4 Generated types are unchanged: `npm run db:types` leaves no diff
+- [ ] 1.5 Linting passes: `npm run lint`
 
 #### Manual
 
-- [ ] 1.5 Studio rejects an UPDATE setting `updated_at` before `created_at` on each of the three tables
-- [ ] 1.6 `npx supabase migration list` shows the new migration as local-only
+- [ ] 1.6 Studio rejects an UPDATE setting `updated_at` before `created_at` on each of the three tables
+- [ ] 1.7 `authenticated` holds all four DML privileges on all five tables and `anon` holds none, after a clean reset
+- [ ] 1.8 `npx supabase migration list` shows the new migration as local-only
 
 ### Phase 2: Design system — primitives and auth restyle
 
