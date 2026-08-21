@@ -34,7 +34,7 @@ The app also carries one visual system by the end of the slice: white/slate surf
 
 ## Scope
 
-**In scope:** the `updated_at` CHECK and F4's policy/index migration; `zod` and shadcn primitives; the design tokens and an **app-wide restyle** off the dark theme — auth screens, confirm-email, dashboard (visually), plus replacing the starter landing and deleting `ui/LibBadge.astro`; the validation schema, data module, and four JSON routes; the `/specialists` page and island; route protection and navigation; integration and pgTAP coverage.
+**In scope:** explicit table GRANTs, the `updated_at` CHECK, and F4's policy/index migration; `zod` and shadcn primitives; the design tokens and an **app-wide restyle** off the dark theme — auth screens, confirm-email, dashboard (visually), plus replacing the starter landing and deleting `ui/LibBadge.astro`; the validation schema, data module, and four JSON routes; the `/specialists` page and island; route protection and navigation; integration and pgTAP coverage.
 
 **Out of scope:** medications, visits, and dashboard _functionality_ (the dashboard is repainted, not built); specialist detail pages; search/sort/filter/pagination; name uniqueness; soft delete for specialists; F3 account erasure; a component-test harness; dark mode; visual-regression or automated a11y tooling; CI changes; pushing the migration to cloud.
 
@@ -44,12 +44,12 @@ The app also carries one visual system by the end of the slice: white/slate surf
 
 ## Phases at a Glance
 
-| Phase            | What it delivers                                                      | Key risk                                                                       |
-| ---------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| 1. Schema        | `updated_at` CHECK on three tables + F4 policy rewrite and indexes    | Migrating a schema already live in cloud — though no rows exist anywhere yet   |
-| 2. Design system | `zod`, shadcn primitives, tokens, app-wide restyle off the dark theme | Restyling working auth forms with no component tests, edited hours ago for F10 |
-| 3. Data layer    | Validation schema, data module, four JSON routes, integration tests   | A second API convention alongside the auth routes' redirect pattern            |
-| 4. UI            | `/specialists` page, island, nav, route protection                    | List state living in both server props and client state                        |
+| Phase            | What it delivers                                                                                 | Key risk                                                                                                                                         |
+| ---------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1. Schema        | Explicit GRANTs on all five tables + `updated_at` CHECK on three + F4 policy rewrite and indexes | Migrating a schema already live in cloud — though no rows exist anywhere yet; the grants are expected to be a cloud no-op but that is unverified |
+| 2. Design system | `zod`, shadcn primitives, tokens, app-wide restyle off the dark theme                            | Restyling working auth forms with no component tests, edited hours ago for F10                                                                   |
+| 3. Data layer    | Validation schema, data module, four JSON routes, integration tests                              | A second API convention alongside the auth routes' redirect pattern                                                                              |
+| 4. UI            | `/specialists` page, island, nav, route protection                                               | List state living in both server props and client state                                                                                          |
 
 **Prerequisites:** F-01 complete (it is — migration applied to cloud 2026-08-18). Docker Desktop and the local Supabase stack running; `.env`/`.dev.vars` pointed at the local stack, which the integration suite requires.
 
@@ -62,6 +62,7 @@ The app also carries one visual system by the end of the slice: white/slate surf
 - **The island's validation and delete-disable branches ship untested by machine.** Accepted deliberately; three manual steps are the only coverage.
 - **F4's rewrite touches all five tables** when only `specialists` is exercised here; the existing 57 pgTAP assertions and 15 integration tests are the regression net.
 - **Two API conventions will coexist permanently.** The plan documents the rule that decides between them; if that rule is not written down, S-02 will copy whichever route it reads first.
+- **The schema never issued GRANTs and silently relied on a platform default that has since changed.** Discovered 2026-08-21 when a Supabase CLI bump pulled a Postgres image with a restricted default ACL, taking pgTAP from 57/57 to 14/57. Phase 1 now issues them explicitly. **Cloud is expected to be unaffected and that is unverified** — check `role_table_grants` there before the next push.
 
 ## Success Criteria (Summary)
 

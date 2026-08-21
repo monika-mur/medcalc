@@ -138,3 +138,66 @@ ungated by omission rather than by decision.
 **Untested blind spot**: how long `supabase start` adds to each CI run, and
 whether the pgTAP + integration pair is fast enough to sit in front of a deploy
 without making pushes painful.
+
+---
+
+## S-05 — Mirror table grants to each table's RLS policy set
+
+**Source**: not an impl-review finding. Surfaced 2026-08-21 while fixing the
+missing-`GRANT` defect in S-01 Phase 1.
+
+**Why deferred**: it is real hardening with a real blast radius, and it arrived
+as a side effect of a Supabase CLI upgrade. Riding it into S-01 would have
+changed a documented behavioural contract on the way past.
+
+**The gap**: S-01 Phase 1 grants all four DML privileges uniformly to
+`authenticated` on all five domain tables. That restores the platform default
+the schema always silently relied on, but it means enforcement rests on a single
+layer — RLS policy asymmetry. Grants that instead mirrored each table's policy
+set would be strictly stronger:
+
+```sql
+grant select, insert, update, delete on public.specialists    to authenticated;
+grant select, insert, update         on public.medications    to authenticated;
+grant select, insert,         delete on public.dosage_changes to authenticated;
+grant select, insert                 on public.supply_events  to authenticated;
+grant select, insert, update, delete on public.visits         to authenticated;
+```
+
+Under that set, a future migration that mistakenly adds a `DELETE` policy to
+`medications` still cannot delete anything — the privilege layer refuses first.
+It also makes `append_only.test.sql`'s own header comment literally true; today
+that file believes it tests grants ("a future migration that loosens one of
+these grants should fail here loudly") while actually testing policies.
+
+**Measured, not theorised**: the mirrored set was applied to a live local stack
+on 2026-08-21. Result was **44/57** — `append_only.test.sql` fails outright. The
+uniform set on the same stack was **57/57**.
+
+**Why it breaks things**: withholding the privilege converts "the statement runs
+and RLS matches zero rows" into `42501 permission denied`. Three artifacts encode
+the first behaviour:
+
+1. `supabase/tests/append_only.test.sql` — 13 assertions checking affected row
+   count and row survival. Its header explicitly warns that `throws_ok` here
+   "would pass for the wrong reason".
+2. `CLAUDE.md` → _Domain schema_ — "Under RLS a DELETE with no policy matches
+   zero rows rather than raising, so tests assert the row survives."
+3. S-01 Phase 3's JSON error contract maps `23503`→409 and zero-rows→404. A
+   `42501` currently has no mapping and would fall through to 500.
+
+**What to do**:
+
+1. Replace the uniform grants with the mirrored set above.
+2. Rewrite `append_only.test.sql` to assert `42501` for the privilege-denied
+   commands, keeping row-survival checks as the positive control. Decide
+   deliberately which assertions stay row-count-based (those where a policy, not
+   a grant, is the blocker — e.g. `dosage_changes` DELETE past its effective
+   date).
+3. Amend the `CLAUDE.md` rule to describe two layers rather than one.
+4. Map `42501` in the API error contract, or assert it can never reach a route.
+
+**Untested blind spot**: whether any legitimate application path performs a
+command it is not granted and currently relies on the silent zero-rows result.
+Nothing in `src/` touches these tables yet, so the answer is "no" today — but it
+must be rechecked after S-02, S-03, and S-04 land.

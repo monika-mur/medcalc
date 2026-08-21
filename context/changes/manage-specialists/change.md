@@ -45,3 +45,13 @@ Scope widened twice on 2026-08-21, both times by explicit decision:
 ### Review
 
 `reviews/plan-review.md` — 2026-08-21, verdict REVISE → SOUND after triage. 0 critical, 6 warnings, 2 observations; 7 fixed, 1 dismissed (F6, subsumed by F7's replacement of the starter landing). All dimensions PASS.
+
+### Post-review: the schema was missing every GRANT
+
+Found 2026-08-21, after the review, while updating the Supabase CLI from 2.98.2 to 2.115.0 ahead of implementation. The bundled Postgres image ships a restricted default ACL for the `postgres` role in `public` (`authenticated=Dxtm` — no SELECT/INSERT/UPDATE/DELETE). Because `20260813185255_domain_schema.sql` issues no `GRANT` at all and the tables are owned by `postgres`, a from-scratch local reset left every domain table unreachable to `authenticated`. pgTAP went 57/57 → 14/57.
+
+This is a latent F-01 defect, not a CLI regression — the schema had always depended on an implicit platform default. The upgrade surfaced it before S-01 built a data module, four routes, and an integration suite on top.
+
+Resolved by adding uniform `GRANT`s to Phase 1's migration, verified at 57/57 against a live stack. The stronger per-table mirrored set was also measured (44/57 — it breaks `append_only.test.sql`, whose header explicitly documents the zero-rows semantics it depends on) and is queued as **S-05** in `domain-schema-foundation/follow-ups/review-fixes.md`.
+
+**Open:** cloud is expected to still carry the old permissive grants and therefore still work. Unverified — check `information_schema.role_table_grants` there before the next `db push`.
