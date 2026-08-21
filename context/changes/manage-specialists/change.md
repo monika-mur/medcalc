@@ -1,7 +1,7 @@
 ---
 change_id: manage-specialists
 title: Manage specialists — add, list, edit, and delete the specialists a user tracks
-status: plan_reviewed
+status: implementing
 created: 2026-08-20
 updated: 2026-08-21
 archived_at: null
@@ -59,3 +59,51 @@ Resolved by adding uniform `GRANT`s to Phase 1's migration, verified at 57/57 ag
 | Checked | Result                     |
 | ------- | -------------------------- |
 | —       | pending (Phase 1 step 1.8) |
+
+## Session state — 2026-08-21 (paused mid Phase 1)
+
+**Where things stand:** Phase 1 code is written and all five automated criteria pass. The phase is **not closed** — its four manual checks are unconfirmed, so `status` stays `implementing` and rows 1.6–1.9 stay unticked.
+
+### Resume with
+
+```
+/10x-implement manage-specialists phase 1
+```
+
+That lands on step 1.6, the first unticked row.
+
+### Done and verified (1.1–1.5)
+
+| Step | Result                                                                |
+| ---- | --------------------------------------------------------------------- |
+| 1.1  | `npm run db:reset` applies both migrations from scratch               |
+| 1.2  | pgTAP **66/66** — the prior 57 plus 3 CHECK and 6 grant assertions    |
+| 1.3  | Grants survive a from-scratch reset with no manual `GRANT` in between |
+| 1.4  | Generated types byte-identical to the committed file                  |
+| 1.5  | `npm run lint` exits 0                                                |
+
+Independent spot-checks beyond the criteria: 16/16 policies carry the wrapped predicate, **19 `auth.uid()` occurrences, 19 wrapped, 0 bare** (matching the count corrected during plan review — the plan originally said 23), both new indexes present, all three CHECK constraints present, `anon` holds no DML on any table.
+
+### Pending — manual, needs a human
+
+- **1.6** In Studio, an UPDATE setting `updated_at` before `created_at` is rejected on `specialists`, `medications`, `visits`
+- **1.7** `authenticated` holds all four DML privileges on all five tables and `anon` holds none. Local evidence already produced and green; re-confirm if you want to see it yourself
+- **1.8** The same query against **cloud** returns five complete rows — see `plan.md` → _Verifying cloud_ for the query and how to read each outcome
+- **1.9** `npx supabase migration list` shows the new migration as local-only. **Blocked:** the CLI returns `401 Unauthorized` because the access token was revoked during the F-01 impl-review triage (finding F1). Run `npx supabase login` first, with `$env:NODE_TLS_REJECT_UNAUTHORIZED = "0"` set as its own statement
+
+Because 1.6–1.9 are unconfirmed, the phase-end commit ritual has **not** run: rows 1.1–1.5 carry no commit SHA yet. Re-entering the phase and confirming the manual steps will close it normally.
+
+### Deviation from the plan, already applied
+
+The grant assertions in `rls.test.sql` use a filtered `information_schema.role_table_grants` query rather than pgTAP's `table_privs_are`, which the plan first specified. `table_privs_are` asserts the **exact** privilege set and fails on the inherited `REFERENCES`/`TRIGGER`/`TRUNCATE`; listing all seven to satisfy it would hard-code the platform default this phase exists to stop depending on. Approved during implementation, and `plan.md` Phase 1 §2 has been rewritten to match.
+
+### Open decision — `npm run db:types` is destructive on failure
+
+The script is `supabase gen types typescript --local > src/db/database.types.ts`. The shell truncates the target **before** the command runs, so any failure leaves a committed file gutted. It happened this session: the CLI hiccuped transiently right after the container restart, `database.types.ts` lost 382 lines, and lint went to 26 errors. Restored with `git checkout`, then re-verified by generating to a temp file and diffing — byte-identical, so 1.4 is genuinely met.
+
+Phases 2–4 each run this script again. Two things to decide next session:
+
+1. Change the script to generate to a temp file and move on success only.
+2. Record it via `/10x-lesson` — a build script that destroys a committed file when its command fails is a class of trap, not a one-off.
+
+Neither was actioned; both are deliberately left open rather than folded into Phase 1 unasked.

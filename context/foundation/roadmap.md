@@ -3,7 +3,7 @@ project: MedCalc
 version: 1
 status: draft
 created: 2026-07-04
-updated: 2026-08-20
+updated: 2026-08-21
 prd_version: 1
 main_goal: speed
 top_blocker: capacity
@@ -30,7 +30,7 @@ Individuals managing multiple chronic medications can't reliably tell whether th
 | ID   | Change ID                  | Outcome (user can …)                                                                       | Prerequisites | PRD refs                                 | Status      | GitHub                                               |
 | ---- | -------------------------- | ------------------------------------------------------------------------------------------ | ------------- | ---------------------------------------- | ----------- | ---------------------------------------------------- |
 | F-01 | domain-schema-foundation   | (foundation) domain schema exists: specialists, medications, dosage-change history, visits | —             | Business Logic (historical preservation) | in-progress | [#1](https://github.com/monika-mur/medcalc/issues/1) |
-| S-01 | manage-specialists         | add, view, and manage the specialists they see                                             | F-01          | FR-003                                   | planning    | [#2](https://github.com/monika-mur/medcalc/issues/2) |
+| S-01 | manage-specialists         | add, view, and manage the specialists they see                                             | F-01          | FR-003                                   | in-progress | [#2](https://github.com/monika-mur/medcalc/issues/2) |
 | S-02 | manage-medications         | add, edit, and archive a medication with a single current daily dosage                     | F-01, S-01    | FR-004, FR-005, FR-007                   | proposed    | [#3](https://github.com/monika-mur/medcalc/issues/3) |
 | S-03 | manage-doctor-visits       | add, edit, and delete a doctor visit                                                       | F-01, S-01    | FR-009, FR-010                           | proposed    | [#4](https://github.com/monika-mur/medcalc/issues/4) |
 | S-04 | supply-status-dashboard    | see, per medication, the calculated supply-end date and color status vs. next visit        | S-02, S-03    | FR-011, US-01                            | proposed    | [#5](https://github.com/monika-mur/medcalc/issues/5) |
@@ -86,7 +86,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Blockers:** —
 - **Unknowns:** —
 - **Risk:** Small and low-risk; sequenced first among slices because both medications (S-02) and visits (S-03) require an existing specialist to assign to.
-- **Status:** planning
+- **Status:** in-progress
 
 ### S-02: Manage medications (single current dosage)
 

@@ -13,7 +13,80 @@ create extension if not exists pgtap with schema extensions;
 
 begin;
 
-select plan(15);
+select plan(21);
+
+-- ---------------------------------------------------------------------------
+-- Table privileges — the layer BELOW the policies
+--
+-- RLS grants nothing. A reachable table needs both a GRANT and a permissive
+-- policy, and until 20260821182457 this schema only ever had the second: it
+-- inherited DML from a Supabase platform default that later changed, and every
+-- table silently became unreachable on a fresh stack. These six assertions
+-- exist so that can never again pass unnoticed — they fail if a migration
+-- stops stating the privilege, rather than trusting one to be inherited.
+--
+-- Deliberately filtered to the four DML privileges. `authenticated` also holds
+-- REFERENCES / TRIGGER / TRUNCATE from the platform's default ACL; asserting
+-- the exact set (pgTAP's table_privs_are) would couple this suite to that
+-- inherited default — the very dependency being removed. These run before the
+-- role switch below, as `postgres`.
+-- ---------------------------------------------------------------------------
+
+select is(
+  (select string_agg(privilege_type, ',' order by privilege_type)
+     from information_schema.role_table_grants
+    where table_schema = 'public' and table_name = 'specialists'
+      and grantee = 'authenticated'
+      and privilege_type in ('SELECT', 'INSERT', 'UPDATE', 'DELETE')),
+  'DELETE,INSERT,SELECT,UPDATE',
+  'grants: authenticated holds all four DML privileges on specialists');
+
+select is(
+  (select string_agg(privilege_type, ',' order by privilege_type)
+     from information_schema.role_table_grants
+    where table_schema = 'public' and table_name = 'medications'
+      and grantee = 'authenticated'
+      and privilege_type in ('SELECT', 'INSERT', 'UPDATE', 'DELETE')),
+  'DELETE,INSERT,SELECT,UPDATE',
+  'grants: authenticated holds all four DML privileges on medications');
+
+select is(
+  (select string_agg(privilege_type, ',' order by privilege_type)
+     from information_schema.role_table_grants
+    where table_schema = 'public' and table_name = 'dosage_changes'
+      and grantee = 'authenticated'
+      and privilege_type in ('SELECT', 'INSERT', 'UPDATE', 'DELETE')),
+  'DELETE,INSERT,SELECT,UPDATE',
+  'grants: authenticated holds all four DML privileges on dosage_changes');
+
+select is(
+  (select string_agg(privilege_type, ',' order by privilege_type)
+     from information_schema.role_table_grants
+    where table_schema = 'public' and table_name = 'supply_events'
+      and grantee = 'authenticated'
+      and privilege_type in ('SELECT', 'INSERT', 'UPDATE', 'DELETE')),
+  'DELETE,INSERT,SELECT,UPDATE',
+  'grants: authenticated holds all four DML privileges on supply_events');
+
+select is(
+  (select string_agg(privilege_type, ',' order by privilege_type)
+     from information_schema.role_table_grants
+    where table_schema = 'public' and table_name = 'visits'
+      and grantee = 'authenticated'
+      and privilege_type in ('SELECT', 'INSERT', 'UPDATE', 'DELETE')),
+  'DELETE,INSERT,SELECT,UPDATE',
+  'grants: authenticated holds all four DML privileges on visits');
+
+-- anon is granted nothing: the app has no anonymous data path, and an
+-- anonymous reader reaching a domain table would be a middleware bug.
+select is(
+  (select count(*)::int
+     from information_schema.role_table_grants
+    where table_schema = 'public' and table_name = 'specialists'
+      and grantee = 'anon'
+      and privilege_type in ('SELECT', 'INSERT', 'UPDATE', 'DELETE')),
+  0,
+  'grants: anon holds no DML privilege on specialists');
 
 -- ---------------------------------------------------------------------------
 -- Fixtures: two users, each owning one row in every table
