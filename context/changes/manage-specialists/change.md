@@ -68,36 +68,38 @@ It is still a defence-in-depth gap: production is protected by one mechanism whe
 
 ## Session state — 2026-08-21 (paused mid Phase 1)
 
-**Where things stand:** Phase 1 code is written and all five automated criteria pass. The phase is **not closed** — its four manual checks are unconfirmed, so `status` stays `implementing` and rows 1.6–1.9 stay unticked.
+**Where things stand:** Phase 1 is **closed** as of 2026-08-25. All nine rows are ticked. `status` stays `implementing` because Phases 2–4 remain.
 
 ### Resume with
 
 ```
-/10x-implement manage-specialists phase 1
+/10x-implement manage-specialists phase 2
 ```
 
-That lands on step 1.6, the first unticked row.
-
-### Done and verified (1.1–1.5)
+### Automated (1.1–1.5)
 
 | Step | Result                                                                |
 | ---- | --------------------------------------------------------------------- |
 | 1.1  | `npm run db:reset` applies both migrations from scratch               |
-| 1.2  | pgTAP **66/66** — the prior 57 plus 3 CHECK and 6 grant assertions    |
+| 1.2  | pgTAP **70/70** — the prior 57 plus 3 CHECK and 10 grant assertions   |
 | 1.3  | Grants survive a from-scratch reset with no manual `GRANT` in between |
 | 1.4  | Generated types byte-identical to the committed file                  |
 | 1.5  | `npm run lint` exits 0                                                |
 
 Independent spot-checks beyond the criteria: 16/16 policies carry the wrapped predicate, **19 `auth.uid()` occurrences, 19 wrapped, 0 bare** (matching the count corrected during plan review — the plan originally said 23), both new indexes present, all three CHECK constraints present, `anon` holds no DML on any table.
 
-### Pending — manual, needs a human
+### Manual (1.6–1.9) — confirmed 2026-08-25
 
-- **1.6** In Studio, an UPDATE setting `updated_at` before `created_at` is rejected on `specialists`, `medications`, `visits`
-- **1.7** `authenticated` holds all four DML privileges on all five tables and `anon` holds none. Local evidence already produced and green; re-confirm if you want to see it yourself
-- **1.8** The same query against **cloud** returns five complete rows — see `plan.md` → _Verifying cloud_ for the query and how to read each outcome
-- **1.9** `npx supabase migration list` shows the new migration as local-only. **Blocked:** the CLI returns `401 Unauthorized` because the access token was revoked during the F-01 impl-review triage (finding F1). Run `npx supabase login` first, with `$env:NODE_TLS_REJECT_UNAUTHORIZED = "0"` set as its own statement
+| Step | Result                                                                                                                                                                             |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1.6  | `23514` raised on all three tables, each naming its own `<table>_updated_at_not_before_created_at` constraint                                                                      |
+| 1.7  | Local: exactly 5 rows, all `authenticated`, all four privileges. No `anon` row                                                                                                     |
+| 1.8  | Cloud: **10 rows** — `authenticated` complete, `anon` also granted. Investigated, found benign in cause and non-exploitable, and closed by amending the migration. See table above |
+| 1.9  | `20260813185255` present on both Local and Remote; `20260821182457` Local-only with an empty Remote column, as required                                                            |
 
-Because 1.6–1.9 are unconfirmed, the phase-end commit ritual has **not** run to completion. Phase 1's code landed early as `fd0ffe5`, out of the ritual's usual order, so on re-entry (2026-08-25) that SHA was written back onto rows 1.1–1.5 and the bookkeeping committed separately. Rows 1.6–1.9 stay unticked and SHA-less until a human confirms them; the phase is still open.
+1.9 also confirms cloud carries F-01's domain schema — which is why the `anon` grants found in 1.8 exist there at all.
+
+Note on 1.6: the verification SQL first handed over used a `DO $$ … $$` block, which Studio's SQL editor breaks by splitting on `;`. Replaced with plain per-table statements and recorded in `lessons.md` → _Hand Studio plain SQL statements, never dollar-quoted blocks_.
 
 ### Deviation from the plan, already applied
 
