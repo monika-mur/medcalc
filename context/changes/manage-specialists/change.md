@@ -128,3 +128,47 @@ Pre-checks the plan asks for, run at approval time:
 
 - **`LibBadge.astro` has no importer anywhere in `src/`.** The file exists (368 bytes) but `Welcome.astro` imports only `Topbar.astro` — every other occurrence of the name is in `context/` prose. So the plan's rationale ("exists only to render dependency-version chips inside `Welcome.astro`") is **stale**: it is already dead code, and deleting it carries no risk at all rather than the small one the plan assumed. The plan-review finding F6, which worried about it colliding with the never-edit-`ui/` rule, is moot for the same reason.
 - **`Welcome.astro` has exactly one importer**, `src/pages/index.astro:2`. Keeping the file at its current path means `index.astro` needs no edit, as planned. It is 126 lines (the plan estimated ~110) and carries `bg-cosmic`, cosmic orbs, and `purple-`/`blue-` washes — all of which the Phase 2 `Select-String` gate scans for.
+
+## Session state — 2026-08-25 (paused mid Phase 2)
+
+**Where things stand:** Phase 2 is **implemented and automated-verified**. Rows 2.1–2.4 are ticked; **2.5–2.12 are manual and untested** — the developer is verifying them tomorrow. `status` stays `implementing`.
+
+### Resume with
+
+```
+/10x-implement manage-specialists phase 2
+```
+
+The resume lands on 2.5, the first unticked row. Nothing needs re-implementing unless manual verification finds a defect.
+
+### Automated (2.1–2.4) — all green
+
+| Step | Result                                                                                          |
+| ---- | ----------------------------------------------------------------------------------------------- |
+| 2.1  | `npm run lint` — 0 errors, 0 warnings                                                           |
+| 2.2  | `npx astro check` — 0 errors, 0 warnings, 5 hints (pre-existing `tseslint.config` deprecations) |
+| 2.3  | `npm run build` — complete, server built in 30.7s                                               |
+| 2.4  | PowerShell `Select-String` scan — no output                                                     |
+
+Spot-checks beyond the criteria, read out of the built CSS (`dist/client/_astro/Layout.*.css`): `--primary: oklch(52.7% .154 150.069)` (green-700), `--ring: oklch(62.7% .194 149.214)` (green-600), `--background: oklch(98.4% .003 247.858)` (slate-50), and **zero** occurrences of `bg-cosmic`. `LibBadge.astro` deleted with no importer remaining anywhere in `src/`.
+
+### Open decision — carried into tomorrow, blocks 2.10
+
+**The plan contradicts itself on border contrast, and the contradiction is currently resolved in favour of the table.** `plan.md`'s palette table assigns slate-200 to "card edges, input borders, topbar rule"; criterion 2.10 asks for "borders ≥ 3:1". Slate-200 on white is **1.35:1**.
+
+Card edges and the topbar rule are decorative and exempt under WCAG 1.4.11 — only the **input** border is arguably a UI-component boundary that must be identifiable. Implemented as the table specifies (`--border` and `--input` both slate-200, which is also stock shadcn), so a strict reading of 2.10 fails on inputs.
+
+The fix, if wanted, is one line: darken `--input` alone to slate-400 (`oklch(0.704 0.04 256.788)`, 2.8:1) or slate-500 (`oklch(0.554 0.046 257.417)`, 4.0:1). `--border` stays slate-200 so cards and the topbar keep their soft edge. Not applied unilaterally because the table names "input borders" explicitly.
+
+### Adaptations applied during implementation
+
+1. **`button.tsx` reverted after the shadcn CLI rewrote it.** `npx shadcn add` pulled the current registry version — unified `radix-ui` import instead of `@radix-ui/react-slot`, extra `xs`/`icon-sm`/`icon-lg` sizes, `shadow-xs` dropped from the default variant. Restored to the committed file, per Phase 2 step 0's rule that nothing in `ui/` is edited. The four **new** primitives do import from `radix-ui`, which is now a dependency alongside the existing `@radix-ui/react-slot`.
+2. **`SignUpForm.tsx` changed one class beyond its import path.** Step 3 says "import path only", but the password hint carried `text-blue-100/50` — roughly 1.1:1 on white, i.e. invisible. Changed to `text-muted-foreground`. The hidden `timezone` input is untouched: still present, uncontrolled, `defaultValue=""`.
+3. **`Layout.astro`'s default title changed** to `"MedCalc — medication supply tracking"`. Not in step 4's file list, but 2.12 requires the tab title to stop reading "10x Astro Starter" and `/` is the only page that passes no title — fixing it at the default avoids the `index.astro` edit the plan wanted to avoid.
+4. **Prettier reformatted the four generated `ui/` files.** `eslint-plugin-prettier` is an error for every path, so the CLI's output (no semicolons, 80 columns) failed `npm run lint` as generated. Formatting only — no class and no token changed.
+
+Additionally, `zod@4.4.3` was installed here rather than in Phase 3, because Phase 2 step 1 owns the dependency install. Nothing imports it yet.
+
+### Trap worth knowing for the 2.4 scan
+
+The plan's `Select-String` command must be run **in a real PowerShell terminal**. Handing it through an intermediate shell mangles the `'components\\ui'` regex down to `'components\ui'`, which PowerShell then reads as a `\u` escape and fails with `Za mało cyfr szesnastkowych` ("not enough hex digits") once per file — twenty errors that look like scan hits but are not. Run it from the file or paste it into PowerShell directly.

@@ -586,10 +586,10 @@ Rollback within a phase is `npm run db:reset`. Once pushed, the `updated_at` CHE
 
 #### Automated
 
-- [ ] 2.1 Linting passes: `npm run lint`
-- [ ] 2.2 Type checking passes: `npx astro check` reports 0 errors and 0 warnings
-- [ ] 2.3 Build passes: `npm run build`
-- [ ] 2.4 No dark-theme remnants: the PowerShell `Select-String` scan from Phase 2 step 4 returns no output
+- [x] 2.1 Linting passes: `npm run lint`
+- [x] 2.2 Type checking passes: `npx astro check` reports 0 errors and 0 warnings
+- [x] 2.3 Build passes: `npm run build`
+- [x] 2.4 No dark-theme remnants: the PowerShell `Select-String` scan from Phase 2 step 4 returns no output
 
 #### Manual
 
