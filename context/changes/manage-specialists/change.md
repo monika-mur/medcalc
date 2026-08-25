@@ -103,9 +103,11 @@ The script is `supabase gen types typescript --local > src/db/database.types.ts`
 
 Phases 2–4 each run this script again, so both open items were actioned on 2026-08-25, outside the plan and at the user's request:
 
-1. **Script replaced.** `db:types` now runs `scripts/gen-db-types.mjs`, which buffers the CLI's stdout, checks exit code / size / a sentinel string, and writes the target only when all three pass. Bytes pass through verbatim (Buffer in, Buffer out) so criterion 1.4's "no diff after regenerating" stays honest. `eslint.config.js` gained a `scripts/**` block with Node globals and type-checked rules off — `.mjs` does not land in the typed project, so those rules only produced `any` noise.
+1. **Script replaced.** `db:types` now runs `scripts/gen-db-types.mjs`, which buffers the CLI's stdout, checks exit code / size / a sentinel string, and writes the target only when all three pass. `eslint.config.js` gained a `scripts/**` block with Node globals and type-checked rules off — `.mjs` does not land in the typed project, so those rules only produced `any` noise.
 2. **Lesson recorded** in `context/foundation/lessons.md` → _Never redirect a generator's stdout straight onto a committed file_.
 
-Verified by stand-in: success path writes byte-identical output and reports "no change"; a non-zero exit and a zero-byte output each refuse and leave the file intact. The sentinel guard (large but bogus output) is unexercised — a permission denial cut the last test short. **The happy path against the real CLI is still unverified**, because Docker Desktop was down; Phase 2's first `npm run db:types` is the real proof.
+Verified against the real CLI once the stack came up: `npm run db:types` reports `no change` and leaves `git status` clean, so criterion 1.4 holds. Failure paths verified by stand-in — a non-zero exit and a zero-byte output each refuse and leave the file intact. The sentinel guard (large but bogus output) is unexercised; a permission denial cut that test short.
+
+**Line endings are the subtlety here.** The CLI emits LF; `core.autocrlf=true` checks this file out as CRLF. A verbatim byte-for-byte write therefore rewrote every line ending and left `git status` reporting a modified file with identical content — the exact signal criterion 1.4 asks a human to read, inverted. The script now matches whatever the file on disk already uses, so "regenerating leaves no diff" is literally true in the working tree rather than only true after normalisation.
 
 This is out-of-plan work. It touches no phase deliverable and is committed separately from Phase 1.
