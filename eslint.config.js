@@ -37,6 +37,25 @@ const baseConfig = tseslint.config({
   },
 });
 
+// Build scripts run in Node, not in the browser or the Worker, so they need
+// Node's globals declared. Confined to scripts/ so nothing under src/ can
+// reach for `process` and have it silently pass lint.
+//
+// Type-checked rules are off here: .mjs does not land in the typed project, so
+// every Node built-in resolves as `any` and the type-aware rules report noise
+// rather than defects. Application code under src/ keeps them.
+const nodeScriptConfig = tseslint.config({
+  files: ["scripts/**/*.{js,mjs}"],
+  extends: [tseslint.configs.disableTypeChecked],
+  languageOptions: {
+    globals: {
+      Buffer: "readonly",
+      console: "readonly",
+      process: "readonly",
+    },
+  },
+});
+
 const reactConfig = tseslint.config({
   files: ["**/*.{js,jsx,ts,tsx}"],
   extends: [pluginReact.configs.flat.recommended],
@@ -76,6 +95,7 @@ export default tseslint.config(
   // about the migration.
   { ignores: ["src/db/database.types.ts"] },
   baseConfig,
+  nodeScriptConfig,
   reactConfig,
   eslintPluginAstro.configs["flat/recommended"],
   ...eslintPluginAstro.configs["flat/jsx-a11y-recommended"],

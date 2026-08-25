@@ -41,3 +41,33 @@ privilege is present today, not that your migration put it there. Issue explicit
 (`table_privs_are`) so an inherited default can never masquerade as a decision.
 
 **Applies to**: plan, plan-review, implement, impl-review
+
+## Never redirect a generator's stdout straight onto a committed file
+
+**Context**: Any npm script, Makefile target, or CI step that regenerates a
+committed artifact from a tool — generated types, OpenAPI clients, schema
+snapshots, lockfiles. The shape to recognise is `<command> > <tracked file>`,
+which in this repo was `db:types`:
+`supabase gen types typescript --local > src/db/database.types.ts`.
+
+**Problem**: The shell opens and truncates the target **before** the command
+runs, so the destruction happens whether or not the command succeeds. Any
+failure — a stopped Docker daemon, a container still restarting, a transient
+CLI hiccup — leaves the committed file gutted rather than untouched. On
+2026-08-21 the CLI hiccupped seconds after a container restart and
+`database.types.ts` lost 382 lines; lint went from clean to 26 errors, and the
+recovery was `git checkout`, not anything the script did. The failure is
+especially nasty because it is silent about its real cause: the visible symptom
+is a wall of type errors in application code, which reads as "my code broke",
+not "my generator did not run". Version control is the only thing that made it
+recoverable, and only because the file happened to be committed and clean at
+the time — mid-edit, the previous content would have been gone.
+
+**Rule**: Never point shell redirection at a tracked file. Buffer the
+generator's output, verify it succeeded (exit code zero, plausible size, and a
+sentinel string the real output always contains), and write the target only
+after all three pass — so a failed run leaves the previous file byte-identical.
+Pass bytes through verbatim, without decoding to a string, when a "regenerating
+leaves no diff" check is part of the suite. See `scripts/gen-db-types.mjs`.
+
+**Applies to**: plan, plan-review, implement, impl-review

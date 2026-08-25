@@ -97,13 +97,15 @@ Because 1.6–1.9 are unconfirmed, the phase-end commit ritual has **not** run t
 
 The grant assertions in `rls.test.sql` use a filtered `information_schema.role_table_grants` query rather than pgTAP's `table_privs_are`, which the plan first specified. `table_privs_are` asserts the **exact** privilege set and fails on the inherited `REFERENCES`/`TRIGGER`/`TRUNCATE`; listing all seven to satisfy it would hard-code the platform default this phase exists to stop depending on. Approved during implementation, and `plan.md` Phase 1 §2 has been rewritten to match.
 
-### Open decision — `npm run db:types` is destructive on failure
+### Resolved 2026-08-25 — `npm run db:types` was destructive on failure
 
 The script is `supabase gen types typescript --local > src/db/database.types.ts`. The shell truncates the target **before** the command runs, so any failure leaves a committed file gutted. It happened this session: the CLI hiccuped transiently right after the container restart, `database.types.ts` lost 382 lines, and lint went to 26 errors. Restored with `git checkout`, then re-verified by generating to a temp file and diffing — byte-identical, so 1.4 is genuinely met.
 
-Phases 2–4 each run this script again. Two things to decide next session:
+Phases 2–4 each run this script again, so both open items were actioned on 2026-08-25, outside the plan and at the user's request:
 
-1. Change the script to generate to a temp file and move on success only.
-2. Record it via `/10x-lesson` — a build script that destroys a committed file when its command fails is a class of trap, not a one-off.
+1. **Script replaced.** `db:types` now runs `scripts/gen-db-types.mjs`, which buffers the CLI's stdout, checks exit code / size / a sentinel string, and writes the target only when all three pass. Bytes pass through verbatim (Buffer in, Buffer out) so criterion 1.4's "no diff after regenerating" stays honest. `eslint.config.js` gained a `scripts/**` block with Node globals and type-checked rules off — `.mjs` does not land in the typed project, so those rules only produced `any` noise.
+2. **Lesson recorded** in `context/foundation/lessons.md` → _Never redirect a generator's stdout straight onto a committed file_.
 
-Neither was actioned; both are deliberately left open rather than folded into Phase 1 unasked.
+Verified by stand-in: success path writes byte-identical output and reports "no change"; a non-zero exit and a zero-byte output each refuse and leave the file intact. The sentinel guard (large but bogus output) is unexercised — a permission denial cut the last test short. **The happy path against the real CLI is still unverified**, because Docker Desktop was down; Phase 2's first `npm run db:types` is the real proof.
+
+This is out-of-plan work. It touches no phase deliverable and is committed separately from Phase 1.
