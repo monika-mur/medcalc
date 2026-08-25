@@ -67,7 +67,38 @@ the time — mid-edit, the previous content would have been gone.
 generator's output, verify it succeeded (exit code zero, plausible size, and a
 sentinel string the real output always contains), and write the target only
 after all three pass — so a failed run leaves the previous file byte-identical.
-Pass bytes through verbatim, without decoding to a string, when a "regenerating
-leaves no diff" check is part of the suite. See `scripts/gen-db-types.mjs`.
+Match the line-ending convention the target already uses rather than writing the
+tool's bytes verbatim: under `core.autocrlf=true` a verbatim LF write rewrites
+every line ending and reports as modified with no content change, which inverts
+the "regenerating leaves no diff" signal it is supposed to preserve. See
+`scripts/gen-db-types.mjs`.
+
+**Applies to**: plan, plan-review, implement, impl-review
+
+## Hand Studio plain SQL statements, never dollar-quoted blocks
+
+**Context**: Any SQL written to be pasted into Supabase Studio's SQL editor —
+manual verification steps, migration rehearsals, ad-hoc checks, seed snippets.
+Distinct from SQL that reaches the server as a file: `supabase db reset`,
+`supabase test db`, and `psql -f` all send the text intact and are unaffected.
+
+**Problem**: Studio's SQL editor splits the buffer on `;` client-side before
+sending. A `DO $$ … $$` body is full of semicolons, so it arrives as fragments
+and the tail — `end loop; end $$;` — is parsed as a statement of its own,
+raising `42601 syntax error at or near "end"`. The error is doubly misleading:
+the SQL is valid, and the reported line number refers to the fragment rather
+than to what was pasted, so it sends you hunting for a syntax bug that does not
+exist. It cost a round trip on 2026-08-25, on Phase 1 step 1.6 of
+`manage-specialists`: a `DO` block with an exception handler, later confirmed to
+run clean under `psql`, failed in Studio. It had been authored while Docker was
+down and shipped untested, so nothing caught it before the developer did.
+
+**Rule**: SQL destined for the Studio editor must be plain statements — no `DO`
+blocks, no `create function` bodies, nothing dollar-quoted. Where the check
+needs iteration or exception handling, split it into one self-contained snippet
+per case and let the raised error be the pass condition, naming the exact error
+text to expect. Verify it in the target tool before handing it over: a block
+that runs clean under `docker exec -i supabase_db_<project> psql -U postgres` is
+not thereby confirmed for Studio.
 
 **Applies to**: plan, plan-review, implement, impl-review
