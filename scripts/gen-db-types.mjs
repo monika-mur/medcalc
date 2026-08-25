@@ -48,10 +48,19 @@ async function generate(code, output) {
   }
 
   const previous = await readFile(TARGET).catch(() => null);
-  const unchanged = previous?.equals(output) ?? false;
+
+  // The CLI emits LF. With core.autocrlf=true git checks this file out as
+  // CRLF, so writing the CLI's bytes verbatim rewrites every line ending and
+  // leaves `git status` reporting a modified file with no content change --
+  // which is precisely the signal criterion 1.4 asks a human to read. Match
+  // whatever the file on disk already uses instead.
+  const wasCrlf = previous?.includes("\r\n") ?? false;
+  const payload = wasCrlf ? Buffer.from(output.toString("utf8").replace(/\r?\n/g, "\r\n"), "utf8") : output;
+
+  const unchanged = previous?.equals(payload) ?? false;
 
   try {
-    await writeFile(TARGET, output);
+    await writeFile(TARGET, payload);
   } catch (error) {
     // A write that fails partway is the one path that can still leave the
     // target damaged, so it must surface loudly — and it must NOT claim the
@@ -62,7 +71,9 @@ async function generate(code, output) {
     process.exit(1);
   }
 
-  process.stdout.write(`db:types — wrote ${TARGET} (${output.length} bytes, ${unchanged ? "no change" : "CHANGED"})\n`);
+  process.stdout.write(
+    `db:types — wrote ${TARGET} (${payload.length} bytes, ${unchanged ? "no change" : "CHANGED"})\n`,
+  );
 }
 
 const chunks = [];
