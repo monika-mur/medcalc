@@ -565,11 +565,11 @@ Rollback within a phase is `npm run db:reset`. Once pushed, the `updated_at` CHE
 
 #### Automated
 
-- [x] 1.1 Migration applies from scratch: `npm run db:reset`
-- [x] 1.2 pgTAP passes at 66 assertions (57 + 3 CHECK + 6 grants): `npm run db:test`
-- [x] 1.3 Grants survive a from-scratch reset: `npm run db:reset` then `npm run db:test` green with no manual GRANT in between
-- [x] 1.4 Generated types are unchanged: `npm run db:types` leaves no diff
-- [x] 1.5 Linting passes: `npm run lint`
+- [x] 1.1 Migration applies from scratch: `npm run db:reset` — fd0ffe5
+- [x] 1.2 pgTAP passes at 66 assertions (57 + 3 CHECK + 6 grants): `npm run db:test` — fd0ffe5
+- [x] 1.3 Grants survive a from-scratch reset: `npm run db:reset` then `npm run db:test` green with no manual GRANT in between — fd0ffe5
+- [x] 1.4 Generated types are unchanged: `npm run db:types` leaves no diff — fd0ffe5
+- [x] 1.5 Linting passes: `npm run lint` — fd0ffe5
 
 #### Manual
 

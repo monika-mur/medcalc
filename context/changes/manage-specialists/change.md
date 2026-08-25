@@ -3,7 +3,7 @@ change_id: manage-specialists
 title: Manage specialists — add, list, edit, and delete the specialists a user tracks
 status: implementing
 created: 2026-08-20
-updated: 2026-08-21
+updated: 2026-08-25
 archived_at: null
 ---
 
@@ -91,7 +91,7 @@ Independent spot-checks beyond the criteria: 16/16 policies carry the wrapped pr
 - **1.8** The same query against **cloud** returns five complete rows — see `plan.md` → _Verifying cloud_ for the query and how to read each outcome
 - **1.9** `npx supabase migration list` shows the new migration as local-only. **Blocked:** the CLI returns `401 Unauthorized` because the access token was revoked during the F-01 impl-review triage (finding F1). Run `npx supabase login` first, with `$env:NODE_TLS_REJECT_UNAUTHORIZED = "0"` set as its own statement
 
-Because 1.6–1.9 are unconfirmed, the phase-end commit ritual has **not** run: rows 1.1–1.5 carry no commit SHA yet. Re-entering the phase and confirming the manual steps will close it normally.
+Because 1.6–1.9 are unconfirmed, the phase-end commit ritual has **not** run to completion. Phase 1's code landed early as `fd0ffe5`, out of the ritual's usual order, so on re-entry (2026-08-25) that SHA was written back onto rows 1.1–1.5 and the bookkeeping committed separately. Rows 1.6–1.9 stay unticked and SHA-less until a human confirms them; the phase is still open.
 
 ### Deviation from the plan, already applied
 
