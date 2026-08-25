@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Mail, Lock, UserPlus } from "lucide-react";
-import { FormField } from "@/components/auth/FormField";
+import { FormField } from "@/components/form/FormField";
 import { PasswordToggle } from "@/components/auth/PasswordToggle";
 import { SubmitButton } from "@/components/auth/SubmitButton";
 import { ServerError } from "@/components/auth/ServerError";
@@ -55,7 +55,7 @@ export default function SignUpForm({ serverError }: Props) {
 
   const passwordHint =
     !errors.password && password.length > 0 && password.length < MIN_PASSWORD_LENGTH ? (
-      <p className="mt-1 text-xs text-blue-100/50">
+      <p className="text-muted-foreground mt-1 text-xs">
         {MIN_PASSWORD_LENGTH - password.length} more character
         {MIN_PASSWORD_LENGTH - password.length !== 1 ? "s" : ""} needed
       </p>
