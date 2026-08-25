@@ -119,3 +119,12 @@ Verified against the real CLI once the stack came up: `npm run db:types` reports
 **Line endings are the subtlety here.** The CLI emits LF; `core.autocrlf=true` checks this file out as CRLF. A verbatim byte-for-byte write therefore rewrote every line ending and left `git status` reporting a modified file with identical content — the exact signal criterion 1.4 asks a human to read, inverted. The script now matches whatever the file on disk already uses, so "regenerating leaves no diff" is literally true in the working tree rather than only true after normalisation.
 
 This is out-of-plan work. It touches no phase deliverable and is committed separately from Phase 1.
+
+## Phase 2 — approved before entry, 2026-08-25
+
+**The `Welcome.astro` replacement and the `ui/LibBadge.astro` deletion are confirmed.** Flagged at the Phase 1/2 boundary as the one part of Phase 2 that removes rather than repaints, and approved without further review. Proceed as `plan.md` Phase 2 §4 specifies.
+
+Pre-checks the plan asks for, run at approval time:
+
+- **`LibBadge.astro` has no importer anywhere in `src/`.** The file exists (368 bytes) but `Welcome.astro` imports only `Topbar.astro` — every other occurrence of the name is in `context/` prose. So the plan's rationale ("exists only to render dependency-version chips inside `Welcome.astro`") is **stale**: it is already dead code, and deleting it carries no risk at all rather than the small one the plan assumed. The plan-review finding F6, which worried about it colliding with the never-edit-`ui/` rule, is moot for the same reason.
+- **`Welcome.astro` has exactly one importer**, `src/pages/index.astro:2`. Keeping the file at its current path means `index.astro` needs no edit, as planned. It is 126 lines (the plan estimated ~110) and carries `bg-cosmic`, cosmic orbs, and `purple-`/`blue-` washes — all of which the Phase 2 `Select-String` gate scans for.
