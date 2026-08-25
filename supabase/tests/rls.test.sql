@@ -13,7 +13,7 @@ create extension if not exists pgtap with schema extensions;
 
 begin;
 
-select plan(21);
+select plan(25);
 
 -- ---------------------------------------------------------------------------
 -- Table privileges — the layer BELOW the policies
@@ -79,6 +79,12 @@ select is(
 
 -- anon is granted nothing: the app has no anonymous data path, and an
 -- anonymous reader reaching a domain table would be a middleware bug.
+--
+-- All five tables, not just specialists. On 2026-08-25 the cloud project was
+-- found carrying the older platform default's anon grants on every one of
+-- them, so a single-table assertion would have gone green while four tables
+-- stayed exposed to the same defect. The migration now revokes explicitly and
+-- these assert it held.
 select is(
   (select count(*)::int
      from information_schema.role_table_grants
@@ -87,6 +93,42 @@ select is(
       and privilege_type in ('SELECT', 'INSERT', 'UPDATE', 'DELETE')),
   0,
   'grants: anon holds no DML privilege on specialists');
+
+select is(
+  (select count(*)::int
+     from information_schema.role_table_grants
+    where table_schema = 'public' and table_name = 'medications'
+      and grantee = 'anon'
+      and privilege_type in ('SELECT', 'INSERT', 'UPDATE', 'DELETE')),
+  0,
+  'grants: anon holds no DML privilege on medications');
+
+select is(
+  (select count(*)::int
+     from information_schema.role_table_grants
+    where table_schema = 'public' and table_name = 'dosage_changes'
+      and grantee = 'anon'
+      and privilege_type in ('SELECT', 'INSERT', 'UPDATE', 'DELETE')),
+  0,
+  'grants: anon holds no DML privilege on dosage_changes');
+
+select is(
+  (select count(*)::int
+     from information_schema.role_table_grants
+    where table_schema = 'public' and table_name = 'supply_events'
+      and grantee = 'anon'
+      and privilege_type in ('SELECT', 'INSERT', 'UPDATE', 'DELETE')),
+  0,
+  'grants: anon holds no DML privilege on supply_events');
+
+select is(
+  (select count(*)::int
+     from information_schema.role_table_grants
+    where table_schema = 'public' and table_name = 'visits'
+      and grantee = 'anon'
+      and privilege_type in ('SELECT', 'INSERT', 'UPDATE', 'DELETE')),
+  0,
+  'grants: anon holds no DML privilege on visits');
 
 -- ---------------------------------------------------------------------------
 -- Fixtures: two users, each owning one row in every table

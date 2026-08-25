@@ -21,6 +21,9 @@ pnpm-debug.log*
 .dev.vars
 .wrangler/
 
+# supabase studio scratch queries ("Untitled query N.sql")
+supabase/snippets/
+
 # macOS-specific files
 .DS_Store
 

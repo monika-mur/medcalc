@@ -141,7 +141,9 @@ This is a latent defect in F-01, not a consequence of the CLI upgrade — the up
   grant select, insert, update, delete on public.visits         to authenticated;
   ```
 
-  **No grants to `anon`.** The app has no anonymous data access — every policy is `to authenticated`, and an anonymous visitor reaching a domain table is a bug in the middleware, not a supported path. There are no sequences to grant (all primary keys are `gen_random_uuid()`).
+  **No grants to `anon`, and the matching `revoke` is issued explicitly** on all five tables. The app has no anonymous data access — every policy is `to authenticated`, and an anonymous visitor reaching a domain table is a bug in the middleware, not a supported path. There are no sequences to grant (all primary keys are `gen_random_uuid()`).
+
+  The `revoke` was added on 2026-08-25, after step 1.8 found the cloud project carrying the older platform default's `anon` grants on all five tables — 10 rows in `role_table_grants` where local has 5. RLS holds (as `anon`: SELECT returns 0 rows, INSERT raises the RLS violation, DELETE reports 0), so this is a defence-in-depth gap rather than a breach. But `GRANT` alone would leave cloud at 10 and local at 5 permanently, making the `anon` assertions true locally and false in production — the exact drift this migration exists to end. The `revoke` is a no-op locally and converges cloud on push. It is unrelated to the mirrored-grants question deferred to S-05, which concerns withholding privileges from `authenticated`; no suite runs as `anon`, so nothing observable changes.
 
 - **The grants are deliberately uniform, not mirrored to each table's policy set.** Restricting them per-table — `medications` without `DELETE`, `supply_events` without `UPDATE`/`DELETE` — is strictly stronger and was measured: it leaves pgTAP at 44/57. `append_only.test.sql` fails, and its header comment explains exactly why the design depends on the looser grant:
 
@@ -167,7 +169,9 @@ This is a latent defect in F-01, not a consequence of the CLI upgrade — the up
 
 **Intent**: Assert the grants exist, so the schema can never again silently depend on a platform default.
 
-**Contract**: Six assertions, one per domain table plus one for `anon`, placed **before** the `set local role authenticated` switch so they run as `postgres`. Each asserts, against `information_schema.role_table_grants` filtered to the four DML privileges, that `authenticated` holds `DELETE,INSERT,SELECT,UPDATE`; the sixth asserts `anon` holds none of the four on `specialists`. Bump the file's plan count from 15 to 21.
+**Contract**: Ten assertions, two per domain table, placed **before** the `set local role authenticated` switch so they run as `postgres`. Each asserts, against `information_schema.role_table_grants` filtered to the four DML privileges, that `authenticated` holds `DELETE,INSERT,SELECT,UPDATE` and that `anon` holds none of the four. Bump the file's plan count from 15 to 25.
+
+Originally six assertions, with the `anon` half covering `specialists` only. Extended to all five tables on 2026-08-25: step 1.8 found cloud carrying `anon` grants on every table, so a single-table assertion would have gone green while four tables stayed exposed to the same defect.
 
 The point is not that DML is permitted — the other suites already prove that indirectly — but that the privilege is **stated by a migration** rather than inherited. That is precisely the property whose absence took the suite from 57/57 to 14/57 on an image bump, and nothing in the repo previously noticed it.
 
@@ -186,7 +190,7 @@ The point is not that DML is permitted — the other suites already prove that i
 #### Automated Verification:
 
 - Migration applies from scratch: `npm run db:reset`
-- pgTAP passes at **66 assertions** — the prior 57 plus 3 for the CHECK and 6 for the grants: `npm run db:test`
+- pgTAP passes at **70 assertions** — the prior 57 plus 3 for the CHECK and 10 for the grants: `npm run db:test`
 - **The grants survive a from-scratch reset**, which is the whole point: `npm run db:reset` followed immediately by `npm run db:test` must be green with no manual `GRANT` in between. The ad-hoc grants applied while diagnosing this are wiped by the reset, so a green run here proves the migration is carrying them
 - Generated types are unchanged: `npm run db:types` leaves `src/db/database.types.ts` with no diff
 - Linting passes: `npm run lint`
@@ -566,16 +570,16 @@ Rollback within a phase is `npm run db:reset`. Once pushed, the `updated_at` CHE
 #### Automated
 
 - [x] 1.1 Migration applies from scratch: `npm run db:reset` — fd0ffe5
-- [x] 1.2 pgTAP passes at 66 assertions (57 + 3 CHECK + 6 grants): `npm run db:test` — fd0ffe5
+- [x] 1.2 pgTAP passes at 70 assertions (57 + 3 CHECK + 10 grants): `npm run db:test` — fd0ffe5
 - [x] 1.3 Grants survive a from-scratch reset: `npm run db:reset` then `npm run db:test` green with no manual GRANT in between — fd0ffe5
 - [x] 1.4 Generated types are unchanged: `npm run db:types` leaves no diff — fd0ffe5
 - [x] 1.5 Linting passes: `npm run lint` — fd0ffe5
 
 #### Manual
 
-- [ ] 1.6 Studio rejects an UPDATE setting `updated_at` before `created_at` on each of the three tables
-- [ ] 1.7 `authenticated` holds all four DML privileges on all five tables and `anon` holds none, after a clean reset
-- [ ] 1.8 The same grant query against the cloud project returns five complete rows — result and date recorded in `change.md`
+- [x] 1.6 Studio rejects an UPDATE setting `updated_at` before `created_at` on each of the three tables
+- [x] 1.7 `authenticated` holds all four DML privileges on all five tables and `anon` holds none, after a clean reset
+- [x] 1.8 The same grant query against the cloud project — checked 2026-08-25: `authenticated` complete on all five tables, `anon` also granted (legacy platform default, RLS holding), resolved by adding an explicit `revoke`. Result recorded in `change.md`
 - [ ] 1.9 `npx supabase migration list` shows the new migration as local-only
 
 ### Phase 2: Design system — primitives and auth restyle

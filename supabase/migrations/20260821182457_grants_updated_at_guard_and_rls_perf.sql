@@ -23,10 +23,33 @@
 --    error contract all encode differently. Tightening is queued as S-05 in
 --    context/changes/domain-schema-foundation/follow-ups/review-fixes.md.
 --
---    Nothing is granted to `anon`. Every policy is `to authenticated`; an
---    anonymous visitor reaching a domain table is a middleware bug, not a
---    supported path. There are no sequences to grant — every PK is
---    gen_random_uuid().
+--    Nothing is granted to `anon`, and the matching REVOKE is issued
+--    explicitly. Every policy is `to authenticated`; an anonymous visitor
+--    reaching a domain table is a middleware bug, not a supported path. There
+--    are no sequences to grant — every PK is gen_random_uuid().
+--
+--    The REVOKE is not defensive boilerplate. Verified on 2026-08-25: the
+--    cloud project, created under the older permissive default, grants all
+--    four DML privileges to `anon` on all five tables — 10 rows in
+--    role_table_grants where local has 5. RLS is what keeps that from being a
+--    breach, and it holds: as `anon`, SELECT returns 0 rows against a
+--    populated table, INSERT raises "new row violates row-level security
+--    policy", and DELETE reports 0. But it means production is protected by
+--    one mechanism where the design intends two, and the anon key ships in the
+--    client bundle. Disable RLS on one table in a later migration, or write
+--    one policy `to public` instead of `to authenticated`, and it becomes full
+--    DML from the internet with nothing behind it.
+--
+--    GRANT alone cannot close that: it would leave cloud at 10 rows and local
+--    at 5 forever, and the anon assertions below would be true locally and
+--    false in production — precisely the local/cloud drift this migration
+--    exists to end. REVOKE is a no-op locally (the newer image's default ACL
+--    grants anon nothing) and converges cloud on push.
+--
+--    This is unrelated to the mirrored-grants question deferred to S-05. That
+--    one is about withholding privileges from `authenticated`, which turns
+--    "RLS matched zero rows" into 42501 and breaks append_only.test.sql. The
+--    suite never runs as `anon`, so nothing observable changes here.
 --
 -- 2. UPDATED_AT FLOOR — settles the maintainer decision F-01's plan review
 --    deferred to S-01 by name. The CHECK closes BACKDATING only. The column
@@ -55,6 +78,14 @@ grant select, insert, update, delete on public.medications    to authenticated;
 grant select, insert, update, delete on public.dosage_changes to authenticated;
 grant select, insert, update, delete on public.supply_events  to authenticated;
 grant select, insert, update, delete on public.visits         to authenticated;
+
+-- No-op locally; converges the cloud project, which still carries the older
+-- platform default's grants to anon. See the header note.
+revoke select, insert, update, delete on public.specialists    from anon;
+revoke select, insert, update, delete on public.medications    from anon;
+revoke select, insert, update, delete on public.dosage_changes from anon;
+revoke select, insert, update, delete on public.supply_events  from anon;
+revoke select, insert, update, delete on public.visits         from anon;
 
 -- ---------------------------------------------------------------------------
 -- 2. updated_at may not precede created_at

@@ -56,9 +56,15 @@ Resolved by adding uniform `GRANT`s to Phase 1's migration, verified at 57/57 ag
 
 **Open:** cloud is expected to still carry the old permissive grants and therefore still work. Unverified as of 2026-08-21. Phase 1 manual step 1.8 now performs that check as read-only reconnaissance and records the result here — the query and how to read each outcome are in `plan.md` → _Verifying cloud_.
 
-| Checked | Result                     |
-| ------- | -------------------------- |
-| —       | pending (Phase 1 step 1.8) |
+| Checked    | Result                                                                                                                                                                                                                                                   |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-25 | **10 rows, not 5.** `authenticated` complete on all five tables (the load-bearing half — the migration is a no-op for it). `anon` **also** holds all four DML privileges on all five tables, inherited from the older platform default. Local returns 5. |
+
+**Interpretation.** Not tampering — the old Supabase default granted DML to `anon` _and_ `authenticated`, which is what this migration's header and `lessons.md` already describe; cloud was created under it. Not a breach either: reproduced locally by granting `anon` the same privileges, and RLS holds on its own — as `anon`, SELECT returns 0 rows against a populated table, INSERT raises `new row violates row-level security policy`, DELETE reports 0. Every policy is `to authenticated` and `anon` matches none.
+
+It is still a defence-in-depth gap: production is protected by one mechanism where the design intends two, and the anon key ships in the client bundle. Disabling RLS on one table in a later migration, or writing one policy `to public`, would make it full DML from the internet with nothing behind it.
+
+**Resolved by amending the migration** rather than deferring: `GRANT` alone would leave cloud at 10 rows and local at 5 permanently, making the `anon` assertions true locally and false in production — the exact drift this migration exists to end. `20260821182457` now issues an explicit `revoke … from anon` on all five tables (a no-op locally, converging cloud on push), and the pgTAP `anon` assertion was extended from `specialists` alone to all five tables — a single-table assertion would have gone green while four tables stayed exposed. pgTAP 66 → **70**. Editing the already-committed migration is safe: only local had applied it, and `db:reset` re-applies from scratch.
 
 ## Session state — 2026-08-21 (paused mid Phase 1)
 
