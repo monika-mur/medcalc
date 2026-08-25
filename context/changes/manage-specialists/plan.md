@@ -577,10 +577,10 @@ Rollback within a phase is `npm run db:reset`. Once pushed, the `updated_at` CHE
 
 #### Manual
 
-- [x] 1.6 Studio rejects an UPDATE setting `updated_at` before `created_at` on each of the three tables
-- [x] 1.7 `authenticated` holds all four DML privileges on all five tables and `anon` holds none, after a clean reset
-- [x] 1.8 The same grant query against the cloud project — checked 2026-08-25: `authenticated` complete on all five tables, `anon` also granted (legacy platform default, RLS holding), resolved by adding an explicit `revoke`. Result recorded in `change.md`
-- [x] 1.9 `npx supabase migration list` shows the new migration as local-only
+- [x] 1.6 Studio rejects an UPDATE setting `updated_at` before `created_at` on each of the three tables — 0adb76e
+- [x] 1.7 `authenticated` holds all four DML privileges on all five tables and `anon` holds none, after a clean reset — 0adb76e
+- [x] 1.8 The same grant query against the cloud project — checked 2026-08-25: `authenticated` complete on all five tables, `anon` also granted (legacy platform default, RLS holding), resolved by adding an explicit `revoke`. Result recorded in `change.md` — 0adb76e
+- [x] 1.9 `npx supabase migration list` shows the new migration as local-only — 0adb76e
 
 ### Phase 2: Design system — primitives and auth restyle
 
