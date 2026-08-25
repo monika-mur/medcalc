@@ -12,7 +12,7 @@
     "format": "prettier --write .",
     "db:reset": "supabase db reset",
     "db:test": "supabase test db",
-    "db:types": "supabase gen types typescript --local > src/db/database.types.ts",
+    "db:types": "node scripts/gen-db-types.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },
