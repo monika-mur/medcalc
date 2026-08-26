@@ -593,14 +593,14 @@ Rollback within a phase is `npm run db:reset`. Once pushed, the `updated_at` CHE
 
 #### Manual
 
-- [x] 2.5 Sign-in and sign-up render correctly and both still submit successfully
-- [x] 2.6 A real signup still stores the browser timezone in `raw_user_meta_data`
-- [x] 2.7 Server-side error display still works on a duplicate-email submit
-- [x] 2.8 Both auth screens usable at 320 px with no horizontal scrolling
-- [x] 2.9 Every existing screen renders white/slate with green only on primary actions, links, and focus rings
-- [x] 2.10 Contrast passes AA on the auth screens and dashboard (text ≥ 4.5:1, UI ≥ 3:1)
-- [x] 2.11 Keyboard focus is visible on every interactive element
-- [x] 2.12 Replaced landing page at `/` renders, its sign-in/sign-up buttons work, and the tab title is no longer "10x Astro Starter"
+- [x] 2.5 Sign-in and sign-up render correctly and both still submit successfully — 47b97db
+- [x] 2.6 A real signup still stores the browser timezone in `raw_user_meta_data` — 47b97db
+- [x] 2.7 Server-side error display still works on a duplicate-email submit — 47b97db
+- [x] 2.8 Both auth screens usable at 320 px with no horizontal scrolling — 47b97db
+- [x] 2.9 Every existing screen renders white/slate with green only on primary actions, links, and focus rings — 47b97db
+- [x] 2.10 Contrast passes AA on the auth screens and dashboard (text ≥ 4.5:1, UI ≥ 3:1) — 47b97db
+- [x] 2.11 Keyboard focus is visible on every interactive element — 47b97db
+- [x] 2.12 Replaced landing page at `/` renders, its sign-in/sign-up buttons work, and the tab title is no longer "10x Astro Starter" — 47b97db
 
 ### Phase 3: Data layer — validation, module, JSON routes, tests
 
