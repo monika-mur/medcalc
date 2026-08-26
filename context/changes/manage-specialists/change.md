@@ -129,17 +129,15 @@ Pre-checks the plan asks for, run at approval time:
 - **`LibBadge.astro` has no importer anywhere in `src/`.** The file exists (368 bytes) but `Welcome.astro` imports only `Topbar.astro` — every other occurrence of the name is in `context/` prose. So the plan's rationale ("exists only to render dependency-version chips inside `Welcome.astro`") is **stale**: it is already dead code, and deleting it carries no risk at all rather than the small one the plan assumed. The plan-review finding F6, which worried about it colliding with the never-edit-`ui/` rule, is moot for the same reason.
 - **`Welcome.astro` has exactly one importer**, `src/pages/index.astro:2`. Keeping the file at its current path means `index.astro` needs no edit, as planned. It is 126 lines (the plan estimated ~110) and carries `bg-cosmic`, cosmic orbs, and `purple-`/`blue-` washes — all of which the Phase 2 `Select-String` gate scans for.
 
-## Session state — 2026-08-25 (paused mid Phase 2)
+## Session state — 2026-08-26 (Phase 2 closed)
 
-**Where things stand:** Phase 2 is **implemented and automated-verified**. Rows 2.1–2.4 are ticked; **2.5–2.12 are manual and untested** — the developer is verifying them tomorrow. `status` stays `implementing`.
+**Where things stand:** Phase 2 is **closed**. All twelve rows are ticked — 2.1–2.4 automated on 2026-08-25, 2.5–2.12 confirmed by the developer on 2026-08-26. `status` stays `implementing` because Phases 3–4 remain.
 
 ### Resume with
 
 ```
-/10x-implement manage-specialists phase 2
+/10x-implement manage-specialists phase 3
 ```
-
-The resume lands on 2.5, the first unticked row. Nothing needs re-implementing unless manual verification finds a defect.
 
 ### Automated (2.1–2.4) — all green
 
@@ -161,6 +159,23 @@ Card edges and the topbar rule are decorative and exempt under WCAG 1.4.11 — o
 **Resolved by splitting the two tokens.** `--input` is now slate-400 (`oklch(0.704 0.04 256.788)`, **2.8:1**); `--border` stays slate-200 so cards and the topbar keep their soft edge. The `:root` header comment in `global.css` records why the two differ, so a future slice does not "fix" the divergence by re-unifying them.
 
 Slate-400 rather than slate-500 (4.0:1) is a deliberate trade: 2.8:1 sits just under a literal 3:1, but slate-500 reads as an outline rather than a boundary and pulls the field borders visually ahead of the content they contain. The decorative-border exemption already means 2.10's "borders ≥ 3:1" is not being read literally across the board; this applies the same judgement to the one border where identifiability actually matters. Re-verified after the change: lint 0/0, `astro check` 0/0, build complete, dark-theme scan clean.
+
+### Manual (2.5–2.12) — confirmed 2026-08-26
+
+All eight passed on the first walk, with no defects found and no rework needed. Verified against `npm run dev` at `http://localhost:4321` with the local Supabase stack up.
+
+| Step | Result                                                                                                                                                                                                                                           |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 2.5  | Both auth screens render and submit successfully                                                                                                                                                                                                 |
+| 2.6  | **The regression the restyle was most likely to cause did not occur** — a real signup still stores the browser timezone in `raw_user_meta_data`. The hidden `timezone` input survived `FormField`'s rewrite present, uncontrolled, and unrenamed |
+| 2.7  | Duplicate-email submit still renders the server-side error                                                                                                                                                                                       |
+| 2.8  | Both auth screens usable at 320 px, no horizontal scrolling                                                                                                                                                                                      |
+| 2.9  | One visual language across `/`, `/auth/signin`, `/auth/signup`, `/auth/confirm-email`, `/dashboard` — no dark background, no purple survives                                                                                                     |
+| 2.10 | AA passes on the auth screens and dashboard, with `--input` at slate-400 per the resolution recorded above                                                                                                                                       |
+| 2.11 | Keyboard focus visible on every interactive element                                                                                                                                                                                              |
+| 2.12 | Landing page renders, sign-in/sign-up buttons reach the right routes, tab title no longer reads "10x Astro Starter"                                                                                                                              |
+
+Developer feedback on the result: _"The page is really pretty, simple and nice."_ Recorded because the app-wide restyle was scope added by explicit decision during planning (see _Scope added during planning_ above) rather than a roadmap outcome — it was worth the phase it cost.
 
 ### Adaptations applied during implementation
 
