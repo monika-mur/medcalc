@@ -205,6 +205,62 @@ Developer feedback on the result: _"The page is really pretty, simple and nice."
 
 Additionally, `zod@4.4.3` was installed here rather than in Phase 3, because Phase 2 step 1 owns the dependency install. Nothing imports it yet.
 
-### Trap worth knowing for the 2.4 scan
+### Trap worth knowing for the 2.4 scan (Phase 2)
 
 The plan's `Select-String` command must be run **in a real PowerShell terminal**. Handing it through an intermediate shell mangles the `'components\\ui'` regex down to `'components\ui'`, which PowerShell then reads as a `\u` escape and fails with `Za mało cyfr szesnastkowych` ("not enough hex digits") once per file — twenty errors that look like scan hits but are not. Run it from the file or paste it into PowerShell directly.
+
+## Session state — 2026-08-26 (Phase 3 closed)
+
+**Where things stand:** Phase 3 is **closed**. All six rows are ticked — 3.1–3.4 automated, 3.5–3.6 confirmed by the developer. `status` stays `implementing` because Phase 4 remains.
+
+### Resume with
+
+```
+/10x-implement manage-specialists phase 4
+```
+
+### Automated (3.1–3.4) — all green
+
+| Step | Result                                                                                       |
+| ---- | -------------------------------------------------------------------------------------------- |
+| 3.1  | `npm test` — 15 passed, 1 file. No new test file added, per the 2026-08-26 scope reduction   |
+| 3.2  | `npm run db:test` — 70/70                                                                    |
+| 3.3  | `npm run lint` — 0 errors, 0 warnings                                                        |
+| 3.4  | `npx astro check` — 0 errors, 0 warnings, 5 hints (the same pre-existing `tseslint.config` deprecations Phase 2 recorded) |
+
+### The embed resolves — no TypeScript tally needed
+
+`plan.md` → _The usage count may not be embeddable_ flagged that PostgREST might fail to resolve `medications(count)` / `visits(count)` across the **composite** FKs `(specialist_id, user_id)`, and specified a tally-in-TypeScript fallback if so.
+
+Probed against the local stack before writing the module: the plain embed resolves with **no disambiguating constraint hint**, returning `medications: [{count: 1}]`. The fallback was not needed and is not implemented. Recorded because the plan explicitly left the decision to implementation.
+
+### Adaptations applied during implementation
+
+1. **One file beyond the plan's list: `src/lib/api/json.ts`.** Phase 3 §3 names only the two route files, but §3 also states the JSON error contract is something "S-02 and S-03 must reuse". Hand-rolling `Response` objects per route would leave that contract a convention rather than a mechanism, so `json` / `jsonError` / `noContent` / `readJsonBody` / `zodFieldErrors` live in one module. The **kind → status mapping stayed in the routes**, because it differs per route — only `[id].ts` can produce 404 or 409 — so nothing is duplicated.
+2. **A non-UUID `id` returns 404, not 500.** The plan specifies 404 for a random UUID and is silent on a malformed one. `/api/specialists/abc` would otherwise reach Postgres as `22P02 invalid input syntax` and surface as a 500, so `[id].ts` validates the segment with `z.uuid()` and answers 404 — both cases mean "no such specialist".
+3. **`Result<T>` and `SpecialistErrorKind` live in `src/lib/db/specialists.ts`**, not in a shared `src/lib/db/result.ts`. There is one consumer; lifting them out belongs with the second, consistent with F-01's refusal to design a data-access layer before a consumer existed.
+
+### Manual (3.5–3.6) — confirmed 2026-08-26
+
+Both passed. The full contract was also exercised by the agent against a dev server before hand-off, so the developer's walk was a second pass rather than the first.
+
+| Path                                            | Result                                                                 |
+| ----------------------------------------------- | ---------------------------------------------------------------------- |
+| GET authed / unauthenticated                    | `200 []` / `401` — no redirect, an API route answers 401 itself        |
+| POST valid                                      | `201`, name and specialty trimmed                                      |
+| POST blank, whitespace-only, 121 chars          | `400` + `fieldErrors.name`                                             |
+| POST malformed JSON                             | `400 "Request body must be valid JSON"` — not a 500                    |
+| PATCH/DELETE random UUID, and a non-UUID        | `404`                                                                  |
+| DELETE referenced / unreferenced                | `409` / `204`, with no raw Postgres text in the 409 body               |
+| **PATCH with `updated_at: "2099-01-01"`** (3.6) | stored value was the module's own stamp; `id` and `user_id` also ignored |
+| Second user PATCH/DELETE first user's row       | `404`, not silent success; row survived unchanged                      |
+
+The last two rows are exactly what §5's deferred tests would have guarded. They work today; as _Scope reduced 2026-08-26_ records, nothing will catch them regressing.
+
+### Noted for `/10x-impl-review`, not actioned
+
+**`created_at` and `updated_at` now come from different clocks.** `created_at` is Postgres's `now()`; `updated_at` is the app's `new Date().toISOString()`. If the app's clock ever runs behind the database's, an update immediately after a create could trip Phase 1's `check (updated_at >= created_at)` and surface as a 500. Locally that is host vs. Docker container; in production it is a Cloudflare Worker vs. Supabase cloud. The window is milliseconds wide and it did not occur in any run here, so it was left alone mid-phase rather than fixed speculatively.
+
+### Trap worth knowing when hand-verifying a route
+
+Astro answers **403** to a cross-origin form POST, so `/api/auth/signin` needs an explicit `Origin` header when driven from curl or PowerShell rather than a browser. A browser sends it itself, which is why the DevTools console is the low-friction way to walk these routes — the session cookie and the header both come for free.
