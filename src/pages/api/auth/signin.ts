@@ -31,5 +31,8 @@ export const POST: APIRoute = async (context) => {
     return context.redirect(`/auth/signin?error=${encodeURIComponent(error.message)}`);
   }
 
-  return context.redirect("/");
+  // `/dashboard` is the documented post-auth destination (`CLAUDE.md` → _Auth &
+  // route protection_). This used to redirect to `/`, which dropped the user on
+  // the signed-out landing page instead of into the app.
+  return context.redirect("/dashboard");
 };

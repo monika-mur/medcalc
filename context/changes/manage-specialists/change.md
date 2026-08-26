@@ -296,3 +296,11 @@ Reported mid-verification: `/auth/signin` rendered blank. It was answering **200
 **Cause: `npm run build` was run twice against a live `astro dev` server**, rewriting `node_modules/.vite/deps_ssr` underneath the running process. No Phase 4 file is on that path — `SubmitButton.tsx`, `SignInForm.tsx`, `FormField.tsx` and `signin.astro` were untouched since Phase 2. Restarting the dev server cleared it; all six screens then rendered with zero errors in `dev.log`.
 
 Recorded in `context/foundation/lessons.md` → _Never run a production build against a live dev server_. The trap is that the symptom names an application component, so it invites debugging the wrong file.
+
+## Out-of-plan work — 2026-08-26, at the developer's request
+
+Both items were raised at the Phase 4 manual gate and actioned after the phase closed, so they are committed separately — the same boundary Phase 1's `db:types` work was held to.
+
+**1. Sign-in now redirects to `/dashboard`.** `src/pages/api/auth/signin.ts` ended with `context.redirect("/")`, while `CLAUDE.md` → _Auth & route protection_ has documented the post-auth redirect as `/dashboard` since the auth slice landed. Code and doc disagreed and the code was the wrong side: signing in dropped the user on the signed-out marketing page rather than in the app, which made the Phase 4 walk awkward enough that the developer noticed. The sibling routes were checked and are correct — `signup` → `/auth/confirm-email`, `signout` → `/`.
+
+**2. Deferred: signed-in users still see the signed-out landing page.** `/` renders **Sign in** / **Sign up** buttons regardless of session, and `/auth/signin` and `/auth/signup` render their forms to an already-authenticated visitor — while the Topbar on the same screen shows their email and a **Sign out** link. Not fixed here: it is an auth-flow concern that arrived after every Phase 4 row was verified, and folding a middleware change in would have meant re-walking the auth screens. Queued with a concrete approach in `follow-ups/signed-in-landing.md`, including the trap that `/auth/confirm-email` must **not** be guest-only (with `enable_confirmations = false` locally, a session already exists when the user lands there, so redirecting it breaks the signup flow criterion 2.12 walks).

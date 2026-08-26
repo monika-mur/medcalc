@@ -102,3 +102,39 @@ that runs clean under `docker exec -i supabase_db_<project> psql -U postgres` is
 not thereby confirmed for Studio.
 
 **Applies to**: plan, plan-review, implement, impl-review
+
+## Never run a production build against a live dev server
+
+**Context**: Any phase whose success criteria include both `npm run build` and a
+browser walk — which is most UI phases here. The shape to recognise is `astro
+dev` already serving on 4321, left up for manual verification, while `npm run
+build` is run in another shell to tick an automated criterion. Applies equally
+to any Vite-backed dev server, not just Astro's.
+
+**Problem**: Both commands share `node_modules/.vite`. The build rewrites
+`deps_ssr/` while the dev server is still holding module references into the old
+bundle, so the running process ends up with a torn dependency graph — typically
+two React copies, or a `react-dom/server` chunk mismatched against `react`. On
+2026-08-26, during Phase 4 of `manage-specialists`, this took `/auth/signin`
+from working to **HTTP 200 with a zero-byte body**: SSR was throwing
+`TypeError: Cannot read properties of null (reading 'useHostTransitionStatus')`
+inside `useFormStatus`. The developer saw only a blank page.
+
+The trap is where the stack trace points. It named `SubmitButton.tsx:12` — a
+file untouched for two phases — so it reads as "the component I am working on
+broke" and invites debugging application code that is provably fine. Nothing in
+the phase's diff was on that path. The build had also _passed_, twice, so the
+automated criteria were green while the app was unservable. Total cost was one
+round trip with the developer plus the time to trace a React-internals error
+back to a cache.
+
+**Rule**: Stop the dev server before running `npm run build`, or run the build
+first and start the dev server after. Never overlap them. When a running dev
+server starts throwing errors inside React, Vite, or another dependency's
+internals — especially naming a file the current change never touched —
+restart it before reading any application code; if a build ran during its
+lifetime, the cache is the suspect, not the component. A blank page served as
+`200` with an empty body is this failure's signature, since the error happens
+mid-render after the status line is committed.
+
+**Applies to**: implement, impl-review
