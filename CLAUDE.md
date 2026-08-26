@@ -48,6 +48,23 @@ Wrangler reads `.dev.vars` (not `.env`) for runtime secrets during `npm run dev`
 - Protected routes are configured via `PROTECTED_ROUTES` array in `src/middleware.ts` — add new protected paths there, not inside individual page components.
 - Auth routes: `/auth/signin`, `/auth/signup`, `/auth/confirm-email`; post-auth redirect: `/dashboard`.
 
+## API conventions
+
+- **Routes a browser navigates to as a form target redirect; routes called by client-side `fetch` return JSON.** Both conventions are live and both stay. Auth submits (`/api/auth/*`) happen before a session exists and must work with JavaScript disabled, so they are native `<form method="POST" action=…>` targets and redirect back with `?error=`. Domain CRUD happens inside an authenticated, hydrated page, so it is `fetch`-driven and returns JSON. Pick by which of those a new route is, not by whichever neighbouring route you read first.
+- **The JSON error shape is `{ error: { message, fieldErrors? } }`**, where `fieldErrors` maps a field name to one message. Helpers live in `src/lib/api/json.ts` — use `jsonError`, not a hand-rolled `Response`. Statuses: **400** validation or malformed body, **401** unauthenticated, **404** not found, **409** blocked by references, **500** otherwise. Success returns the affected row (201 on create), or **204** for DELETE.
+- **Guard `request.json()` in `try`/`catch`** (`readJsonBody`). A malformed body must produce a 400 in the contract's shape, not an unhandled 500.
+- **Only parsed zod output reaches a data module** — never the raw request body, and never a spread of it. See the `updated_at` rule under _Domain schema_.
+- **Data modules live in `src/lib/db/<entity>.ts`**, take a `SupabaseClient` as their first argument so a test can pass an authenticated client directly, and **never filter by `user_id`** — RLS does that, and a redundant filter would hide a policy regression. They return a `Result<T>` discriminated union and map Postgres error codes to domain error kinds; a raw Postgres message never reaches a response.
+- **Zero rows is not an error, so 404 has to be detected.** Under RLS an UPDATE or DELETE against a missing or foreign `id` matches zero rows and returns success. Chain `.select()` onto both statements and treat an empty result array as not-found; without it, a PATCH against a stranger's row returns 200 and a DELETE returns 204.
+
+## Design conventions
+
+- **White/slate surfaces with green as a rationed accent.** Green means primary action, active, or healthy; red means destructive or error; everything else is neutral. A screen where green is a background is a screen where green has stopped meaning anything.
+- **Colour comes from the `:root` tokens in `src/styles/global.css`**, because `components.json` sets `cssVariables: true`. Use `bg-primary` / `text-primary` / `border-input`; do not hardcode `green-*` in a component. Needing to edit a file in `src/components/ui/` to change a colour means the token is wrong.
+- **`green-700` for anything with a letter in it, `green-600` for rings and borders.** `green-600` on white is 3.26:1 — it passes the 3:1 threshold for non-text UI and fails the 4.5:1 threshold for text. Never use `green-500` for text at any size.
+- **`--input` is deliberately darker than `--border`** (slate-400 vs slate-200). An input's border is a UI-component boundary that must be identifiable; a card edge and the topbar rule are decorative and exempt under WCAG 1.4.11. Do not "fix" the divergence by re-unifying them.
+- **Only `:root` is live.** The `.dark` block in `global.css` is dead — nothing sets `class="dark"` and there is no dark mode. Leave it alone rather than tuning it; a slice that wants dark mode starts by populating it.
+
 ## Supabase
 
 - Local dev: run `npx supabase start`, then copy the printed `API URL` and `anon key` to `.env` and `.dev.vars`.
