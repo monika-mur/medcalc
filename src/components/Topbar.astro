@@ -1,5 +1,16 @@
 ---
 const { user } = Astro.locals;
+
+const navLinks = [
+  { href: "/dashboard", label: "Dashboard" },
+  { href: "/specialists", label: "Specialists" },
+];
+
+const path = Astro.url.pathname;
+
+// "Active" is carried by an underline and `aria-current`, not by colour alone —
+// every link in this bar is already green.
+const isActive = (href: string) => path === href || path.startsWith(`${href}/`);
 ---
 
 <header class="border-border bg-card border-b">
@@ -9,9 +20,18 @@ const { user } = Astro.locals;
         <>
           <span class="text-muted-foreground">{user.email}</span>
           <nav class="flex items-center gap-4">
-            <a href="/dashboard" class="text-primary rounded-sm transition-colors hover:underline">
-              Dashboard
-            </a>
+            {navLinks.map(({ href, label }) => (
+              <a
+                href={href}
+                aria-current={isActive(href) ? "page" : undefined}
+                class:list={[
+                  "text-primary rounded-sm border-b-2 pb-0.5 transition-colors hover:underline",
+                  isActive(href) ? "border-primary font-semibold" : "border-transparent",
+                ]}
+              >
+                {label}
+              </a>
+            ))}
             <form method="POST" action="/api/auth/signout">
               <button type="submit" class="text-primary rounded-sm transition-colors hover:underline">
                 Sign out

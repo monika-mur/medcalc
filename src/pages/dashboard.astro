@@ -1,25 +1,24 @@
 ---
+import Topbar from "@/components/Topbar.astro";
 import Layout from "@/layouts/Layout.astro";
 
 const { user } = Astro.locals;
 ---
 
 <Layout title="Dashboard">
-  <div class="bg-background flex min-h-screen items-center justify-center p-4">
+  <!--
+    The Topbar is the only navigation between domain screens, so every signed-in
+    page carries it. Its own sign-out form is why this page no longer has one.
+    S-04 still owns building the dashboard; this is chrome, not content.
+  -->
+  <Topbar />
+  <div class="flex items-center justify-center p-4 py-16">
     <div class="border-border bg-card rounded-2xl border p-8 text-center shadow-sm">
       <h1 class="text-foreground mb-4 text-3xl font-bold">Dashboard</h1>
       <p class="text-muted-foreground">
         Welcome, <span class="text-foreground font-semibold">{user?.email}</span>
       </p>
       <p class="text-muted-foreground mt-2 text-sm">This page is only for authenticated users.</p>
-      <form method="POST" action="/api/auth/signout" class="mt-6">
-        <button
-          type="submit"
-          class="border-border hover:bg-accent focus-visible:ring-ring/50 rounded-md border px-4 py-2 text-sm transition-colors outline-none focus-visible:ring-[3px]"
-        >
-          Sign out
-        </button>
-      </form>
     </div>
   </div>
 </Layout>

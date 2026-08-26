@@ -1,0 +1,48 @@
+---
+import SpecialistsManager from "@/components/specialists/SpecialistsManager";
+import Topbar from "@/components/Topbar.astro";
+import Layout from "@/layouts/Layout.astro";
+import { listSpecialists, type SpecialistWithUsage } from "@/lib/db/specialists";
+import { createClient } from "@/lib/supabase";
+
+// Fetched server-side so the list is in the first HTML response — no loading
+// flash and no round trip before first paint.
+const supabase = createClient(Astro.request.headers, Astro.cookies);
+
+let specialists: SpecialistWithUsage[] = [];
+let loadFailed = false;
+
+if (supabase) {
+  const result = await listSpecialists(supabase);
+  if (result.ok) {
+    specialists = result.data;
+  } else {
+    loadFailed = true;
+  }
+}
+---
+
+<Layout title="Specialists">
+  <Topbar />
+  <main class="px-4 py-8 sm:px-6">
+    <div class="mx-auto w-full max-w-3xl">
+      <h1 class="text-foreground text-2xl font-bold">Specialists</h1>
+      <p class="text-muted-foreground mt-1 text-sm">
+        The doctors you track. Medications and visits are linked to a specialist, so consistent names keep the supply
+        calculation honest.
+      </p>
+
+      {
+        loadFailed && (
+          <p class="border-destructive/40 text-destructive mt-6 rounded-md border px-4 py-3 text-sm">
+            Your specialists could not be loaded. Reload the page to try again.
+          </p>
+        )
+      }
+
+      <div class="border-border bg-card mt-6 rounded-xl border p-4 shadow-sm sm:p-6">
+        <SpecialistsManager initialSpecialists={specialists} client:load />
+      </div>
+    </div>
+  </main>
+</Layout>
