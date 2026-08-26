@@ -221,11 +221,11 @@ The plan's `Select-String` command must be run **in a real PowerShell terminal**
 
 ### Automated (3.1–3.4) — all green
 
-| Step | Result                                                                                       |
-| ---- | -------------------------------------------------------------------------------------------- |
-| 3.1  | `npm test` — 15 passed, 1 file. No new test file added, per the 2026-08-26 scope reduction   |
-| 3.2  | `npm run db:test` — 70/70                                                                    |
-| 3.3  | `npm run lint` — 0 errors, 0 warnings                                                        |
+| Step | Result                                                                                                                    |
+| ---- | ------------------------------------------------------------------------------------------------------------------------- |
+| 3.1  | `npm test` — 15 passed, 1 file. No new test file added, per the 2026-08-26 scope reduction                                |
+| 3.2  | `npm run db:test` — 70/70                                                                                                 |
+| 3.3  | `npm run lint` — 0 errors, 0 warnings                                                                                     |
 | 3.4  | `npx astro check` — 0 errors, 0 warnings, 5 hints (the same pre-existing `tseslint.config` deprecations Phase 2 recorded) |
 
 ### The embed resolves — no TypeScript tally needed
@@ -244,16 +244,16 @@ Probed against the local stack before writing the module: the plain embed resolv
 
 Both passed. The full contract was also exercised by the agent against a dev server before hand-off, so the developer's walk was a second pass rather than the first.
 
-| Path                                            | Result                                                                 |
-| ----------------------------------------------- | ---------------------------------------------------------------------- |
-| GET authed / unauthenticated                    | `200 []` / `401` — no redirect, an API route answers 401 itself        |
-| POST valid                                      | `201`, name and specialty trimmed                                      |
-| POST blank, whitespace-only, 121 chars          | `400` + `fieldErrors.name`                                             |
-| POST malformed JSON                             | `400 "Request body must be valid JSON"` — not a 500                    |
-| PATCH/DELETE random UUID, and a non-UUID        | `404`                                                                  |
-| DELETE referenced / unreferenced                | `409` / `204`, with no raw Postgres text in the 409 body               |
+| Path                                            | Result                                                                   |
+| ----------------------------------------------- | ------------------------------------------------------------------------ |
+| GET authed / unauthenticated                    | `200 []` / `401` — no redirect, an API route answers 401 itself          |
+| POST valid                                      | `201`, name and specialty trimmed                                        |
+| POST blank, whitespace-only, 121 chars          | `400` + `fieldErrors.name`                                               |
+| POST malformed JSON                             | `400 "Request body must be valid JSON"` — not a 500                      |
+| PATCH/DELETE random UUID, and a non-UUID        | `404`                                                                    |
+| DELETE referenced / unreferenced                | `409` / `204`, with no raw Postgres text in the 409 body                 |
 | **PATCH with `updated_at: "2099-01-01"`** (3.6) | stored value was the module's own stamp; `id` and `user_id` also ignored |
-| Second user PATCH/DELETE first user's row       | `404`, not silent success; row survived unchanged                      |
+| Second user PATCH/DELETE first user's row       | `404`, not silent success; row survived unchanged                        |
 
 The last two rows are exactly what §5's deferred tests would have guarded. They work today; as _Scope reduced 2026-08-26_ records, nothing will catch them regressing.
 
@@ -264,3 +264,35 @@ The last two rows are exactly what §5's deferred tests would have guarded. They
 ### Trap worth knowing when hand-verifying a route
 
 Astro answers **403** to a cross-origin form POST, so `/api/auth/signin` needs an explicit `Origin` header when driven from curl or PowerShell rather than a browser. A browser sends it itself, which is why the DevTools console is the low-friction way to walk these routes — the session cookie and the header both come for free.
+
+A `DELETE` with no body trips the same guard, while a `POST` carrying `Content-Type: application/json` does not — Astro's CSRF check keys off the form content types. So a JSON `POST` walked clean without an `Origin` header and the `DELETE` immediately after it returned `403 Cross-site DELETE form submissions are forbidden`, which reads as an authorization bug rather than as the origin check it is.
+
+## Session state — 2026-08-26 (Phase 4 closed)
+
+**Where things stand:** Phase 4 is **closed**. All thirteen rows are ticked — 4.1–4.4 automated, 4.5–4.13 confirmed by the developer, who reported the walk as _"all works perfectly"_ with no defects found. Every phase is now complete; `status` moves to `implemented`.
+
+### Automated (4.1–4.4) — all green
+
+| Step | Result                                                                                                                       |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------- |
+| 4.1  | `npm run lint` — 0 errors, 0 warnings                                                                                        |
+| 4.2  | `npx astro check` — 0 errors, 0 warnings, 5 hints (the same pre-existing `tseslint.config` deprecations Phases 2–3 recorded) |
+| 4.3  | `npm run build` — complete, server built in 13.7s                                                                            |
+| 4.4  | `npm test` — 15/15; `npm run db:test` — 70/70                                                                                |
+
+Agent-side spot-checks against a dev server before hand-off, so the developer's walk was a second pass: the SSR'd list appears in the raw curl HTML ordered by name (4.8); a signed-out `GET /specialists` answers `302 → /auth/signin` (4.9); a referenced `DELETE` answers `409` and an unreferenced one `204`, with the disabled control rendering `aria-describedby` wired to its reason text (4.6); the active nav link carries `aria-current="page"`.
+
+### Adaptations applied during implementation
+
+1. **`dashboard.astro` gained `<Topbar />`, and lost its inline sign-out form.** Plan §1 says the page should include `Topbar.astro` "consistently with `dashboard.astro`" — but `dashboard.astro` never had one. Left alone, `/specialists` would carry the nav and `/dashboard` would be a dead end, which fails 4.11's "reads as one design". Surfaced as a mismatch and approved before the edit. Chrome only; S-04 still owns building the dashboard.
+2. **`specialists.astro` renders a load-failure notice.** The plan specifies a fallback only for the unconfigured-client case. Rendering "No specialists yet" after a failed query would be a lie, so a failed `listSpecialists` sets a flag the page renders as a notice. Kept in the page rather than the island so the island's prop contract stays exactly as planned.
+3. **`SpecialistsManager.tsx` imports `zodFieldErrors` from `@/lib/api/json`** — a runtime import of the API-contract module into the client bundle. It is browser-safe (only `Response`/`JSON`), and sharing it means client-side and server-side validation messages are identical rather than two copies free to drift.
+4. **Delete confirmation is per-row rather than a single hoisted dialog.** Radix restores focus to the trigger on cancel, which is the common path. On a successful delete the trigger unmounts with its row, so the handler sends focus to the add form's name input on the next tick instead of letting it fall to `document.body`.
+
+### The blank sign-in page was the dev server, not the code
+
+Reported mid-verification: `/auth/signin` rendered blank. It was answering **200 with a zero-byte body**, and the SSR render was throwing `TypeError: Cannot read properties of null (reading 'useHostTransitionStatus')` at `useFormStatus` in `SubmitButton.tsx:12` — React's server dispatcher coming back `null`.
+
+**Cause: `npm run build` was run twice against a live `astro dev` server**, rewriting `node_modules/.vite/deps_ssr` underneath the running process. No Phase 4 file is on that path — `SubmitButton.tsx`, `SignInForm.tsx`, `FormField.tsx` and `signin.astro` were untouched since Phase 2. Restarting the dev server cleared it; all six screens then rendered with zero errors in `dev.log`.
+
+Recorded in `context/foundation/lessons.md` → _Never run a production build against a live dev server_. The trap is that the symptom names an application component, so it invites debugging the wrong file.
