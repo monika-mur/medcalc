@@ -129,6 +129,25 @@ Pre-checks the plan asks for, run at approval time:
 - **`LibBadge.astro` has no importer anywhere in `src/`.** The file exists (368 bytes) but `Welcome.astro` imports only `Topbar.astro` — every other occurrence of the name is in `context/` prose. So the plan's rationale ("exists only to render dependency-version chips inside `Welcome.astro`") is **stale**: it is already dead code, and deleting it carries no risk at all rather than the small one the plan assumed. The plan-review finding F6, which worried about it colliding with the never-edit-`ui/` rule, is moot for the same reason.
 - **`Welcome.astro` has exactly one importer**, `src/pages/index.astro:2`. Keeping the file at its current path means `index.astro` needs no edit, as planned. It is 126 lines (the plan estimated ~110) and carries `bg-cosmic`, cosmic orbs, and `purple-`/`blue-` washes — all of which the Phase 2 `Select-String` gate scans for.
 
+## Scope reduced 2026-08-26 — test authoring leaves the slice
+
+**Decided at the Phase 2/3 boundary, by explicit instruction:** no test code is written in Phase 3 or Phase 4. Test authoring moves to a dedicated skill that is not yet installed.
+
+**What this removes.** Phase 3 §5 no longer creates `tests/integration/specialists.test.ts`. No pgTAP is added beyond Phase 1's.
+
+**What it keeps.** The existing suites still run as regression gates in both phases — `npm test` and `npm run db:test` stay in the success criteria. Running an existing suite is not authoring tests, they cost seconds against a stack that is already up, and they are what catches a Phase 3 change breaking Phase 1's schema or the auth paths. Criterion 3.1 was reworded from "including the new file" to "with no new file added to it" so a future reader cannot mistake a green run for coverage of this slice.
+
+**What it costs, stated plainly.** Nothing this slice builds in Phases 3 and 4 will carry automated coverage — not the data module, not the four routes, not the island. Two of the missing assertions are worse than the rest because they are the only mechanism that could catch their regression:
+
+- **A caller-supplied `updated_at` must be ignored.** This is the half of impl-review F8 that Phase 1's `check (updated_at >= created_at)` provably cannot reach — the CHECK blocks backdating, but a client can still set a future value, and the UPDATE policies constrain no columns. There is no database-level fallback: revoking column UPDATE would block the module's own write, and a trigger is ruled out by the no-procedural-code property. The application path is the only lever, and it now has no automated guard.
+- **A zero-rows match must surface as 404, not success.** Under RLS an UPDATE or DELETE against a missing or foreign `id` returns success with no error. The pre-existing cross-user isolation test does **not** cover this — it asserts only that the row survives, which stays true when the handler wrongly reports success.
+
+So the slice still closes F8 in code, but it no longer closes it in a way that stays closed. That is the honest characterisation.
+
+**Compensation, and its limits.** Phase 3's manual criteria were strengthened: 3.5 keeps the JSON error contract walk, and a new **3.6** requires sending a PATCH with a future `updated_at` in the body and reading the row back. Phase 3 §2 now instructs that `.update({ ...input })` on this path is a defect regardless of whether anything currently fails. This is not equivalent cover — a manual step confirms behaviour once, on the day, and cannot fail a future change.
+
+**Hand-off.** Phase 3 §5 keeps the full test contract verbatim rather than deleting it, and flags the two assertions above as the ones to write first, so the test skill inherits a specification instead of rediscovering one. `plan.md`'s "Testing Strategy" and "Accepted gap" sections were both rewritten to match, so no section still promises coverage the slice does not deliver.
+
 ## Session state — 2026-08-26 (Phase 2 closed)
 
 **Where things stand:** Phase 2 is **closed**. All twelve rows are ticked — 2.1–2.4 automated on 2026-08-25, 2.5–2.12 confirmed by the developer on 2026-08-26. `status` stays `implementing` because Phases 3–4 remain.
