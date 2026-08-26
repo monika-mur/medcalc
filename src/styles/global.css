@@ -13,6 +13,12 @@
   and fails AA for text, 700 is 5.02:1 and passes. 600 is kept for the focus
   ring and other non-text UI, where the threshold is 3:1.
 
+  `--border` and `--input` are deliberately different. Card edges and the
+  topbar rule are decorative and exempt under WCAG 1.4.11, so they keep the
+  soft slate-200 (1.35:1). A field's boundary is what makes the control
+  identifiable, so `--input` is slate-400 (2.8:1) — visibly bounded without
+  reading as an outline.
+
   Only this block is live. The `.dark` block below is dead — nothing in the
   repo sets `class="dark"` and no dark mode is planned.
 */
@@ -34,7 +40,7 @@
   --accent-foreground: oklch(0.208 0.042 265.755); /* slate-900 */
   --destructive: oklch(0.577 0.245 27.325); /* red-600  #DC2626 */
   --border: oklch(0.929 0.013 255.508); /* slate-200 #E2E8F0 */
-  --input: oklch(0.929 0.013 255.508); /* slate-200 */
+  --input: oklch(0.704 0.04 256.788); /* slate-400 #94A3B8 */
   --ring: oklch(0.627 0.194 149.214); /* green-600 #16A34A */
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);

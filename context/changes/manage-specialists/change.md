@@ -3,7 +3,7 @@ change_id: manage-specialists
 title: Manage specialists — add, list, edit, and delete the specialists a user tracks
 status: implementing
 created: 2026-08-20
-updated: 2026-08-25
+updated: 2026-08-26
 archived_at: null
 ---
 
@@ -152,13 +152,15 @@ The resume lands on 2.5, the first unticked row. Nothing needs re-implementing u
 
 Spot-checks beyond the criteria, read out of the built CSS (`dist/client/_astro/Layout.*.css`): `--primary: oklch(52.7% .154 150.069)` (green-700), `--ring: oklch(62.7% .194 149.214)` (green-600), `--background: oklch(98.4% .003 247.858)` (slate-50), and **zero** occurrences of `bg-cosmic`. `LibBadge.astro` deleted with no importer remaining anywhere in `src/`.
 
-### Open decision — carried into tomorrow, blocks 2.10
+### Resolved 2026-08-26 — border contrast, `--input` split from `--border`
 
-**The plan contradicts itself on border contrast, and the contradiction is currently resolved in favour of the table.** `plan.md`'s palette table assigns slate-200 to "card edges, input borders, topbar rule"; criterion 2.10 asks for "borders ≥ 3:1". Slate-200 on white is **1.35:1**.
+**The plan contradicted itself on border contrast.** `plan.md`'s palette table assigns slate-200 to "card edges, input borders, topbar rule"; criterion 2.10 asks for "borders ≥ 3:1". Slate-200 on white is **1.35:1**.
 
-Card edges and the topbar rule are decorative and exempt under WCAG 1.4.11 — only the **input** border is arguably a UI-component boundary that must be identifiable. Implemented as the table specifies (`--border` and `--input` both slate-200, which is also stock shadcn), so a strict reading of 2.10 fails on inputs.
+Card edges and the topbar rule are decorative and exempt under WCAG 1.4.11 — only the **input** border is a UI-component boundary that must be identifiable. Phase 2 first implemented the table as written (`--border` and `--input` both slate-200, which is also stock shadcn), so a strict reading of 2.10 failed on inputs.
 
-The fix, if wanted, is one line: darken `--input` alone to slate-400 (`oklch(0.704 0.04 256.788)`, 2.8:1) or slate-500 (`oklch(0.554 0.046 257.417)`, 4.0:1). `--border` stays slate-200 so cards and the topbar keep their soft edge. Not applied unilaterally because the table names "input borders" explicitly.
+**Resolved by splitting the two tokens.** `--input` is now slate-400 (`oklch(0.704 0.04 256.788)`, **2.8:1**); `--border` stays slate-200 so cards and the topbar keep their soft edge. The `:root` header comment in `global.css` records why the two differ, so a future slice does not "fix" the divergence by re-unifying them.
+
+Slate-400 rather than slate-500 (4.0:1) is a deliberate trade: 2.8:1 sits just under a literal 3:1, but slate-500 reads as an outline rather than a boundary and pulls the field borders visually ahead of the content they contain. The decorative-border exemption already means 2.10's "borders ≥ 3:1" is not being read literally across the board; this applies the same judgement to the one border where identifiability actually matters. Re-verified after the change: lint 0/0, `astro check` 0/0, build complete, dark-theme scan clean.
 
 ### Adaptations applied during implementation
 
