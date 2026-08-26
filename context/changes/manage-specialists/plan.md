@@ -640,19 +640,19 @@ Rollback within a phase is `npm run db:reset`. Once pushed, the `updated_at` CHE
 
 #### Automated
 
-- [x] 4.1 Linting passes: `npm run lint`
-- [x] 4.2 Type checking passes: `npx astro check` reports 0 errors and 0 warnings
-- [x] 4.3 Build passes: `npm run build`
-- [x] 4.4 Both suites still pass: `npm test` and `npm run db:test`
+- [x] 4.1 Linting passes: `npm run lint` — f70a79e
+- [x] 4.2 Type checking passes: `npx astro check` reports 0 errors and 0 warnings — f70a79e
+- [x] 4.3 Build passes: `npm run build` — f70a79e
+- [x] 4.4 Both suites still pass: `npm test` and `npm run db:test` — f70a79e
 
 #### Manual
 
-- [x] 4.5 Full round trip in the browser: add, edit, delete
-- [x] 4.6 Delete disabled with a visible reason when a medication is assigned; unassigned delete succeeds
-- [x] 4.7 Inline validation rejects blank and whitespace-only input before any request
-- [x] 4.8 List is present in the initial HTML response (view-source, not devtools)
-- [x] 4.9 Signed-out visit to `/specialists` redirects to `/auth/signin`
-- [x] 4.10 Whole flow usable at 320 px with no horizontal scrolling
-- [x] 4.11 `/specialists` reads as one design with `/dashboard` and the auth screens
-- [x] 4.12 Contrast passes AA on `/specialists` (specialty text, Add button label, disabled-delete reason)
-- [x] 4.13 Full flow completable by keyboard alone, with visible focus and sensible focus return after the delete dialog
+- [x] 4.5 Full round trip in the browser: add, edit, delete — f70a79e
+- [x] 4.6 Delete disabled with a visible reason when a medication is assigned; unassigned delete succeeds — f70a79e
+- [x] 4.7 Inline validation rejects blank and whitespace-only input before any request — f70a79e
+- [x] 4.8 List is present in the initial HTML response (view-source, not devtools) — f70a79e
+- [x] 4.9 Signed-out visit to `/specialists` redirects to `/auth/signin` — f70a79e
+- [x] 4.10 Whole flow usable at 320 px with no horizontal scrolling — f70a79e
+- [x] 4.11 `/specialists` reads as one design with `/dashboard` and the auth screens — f70a79e
+- [x] 4.12 Contrast passes AA on `/specialists` (specialty text, Add button label, disabled-delete reason) — f70a79e
+- [x] 4.13 Full flow completable by keyboard alone, with visible focus and sensible focus return after the delete dialog — f70a79e
