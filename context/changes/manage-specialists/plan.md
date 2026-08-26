@@ -626,15 +626,15 @@ Rollback within a phase is `npm run db:reset`. Once pushed, the `updated_at` CHE
 
 #### Automated
 
-- [x] 3.1 Existing integration suite still passes, with no new file added to it: `npm test`
-- [x] 3.2 pgTAP still passes: `npm run db:test`
-- [x] 3.3 Linting passes: `npm run lint`
-- [x] 3.4 Type checking passes: `npx astro check` reports 0 errors and 0 warnings
+- [x] 3.1 Existing integration suite still passes, with no new file added to it: `npm test` — 36b2500
+- [x] 3.2 pgTAP still passes: `npm run db:test` — 36b2500
+- [x] 3.3 Linting passes: `npm run lint` — 36b2500
+- [x] 3.4 Type checking passes: `npx astro check` reports 0 errors and 0 warnings — 36b2500
 
 #### Manual
 
-- [x] 3.5 Routes exercised against `npm run dev` confirming the JSON error contract for 400 (blank), 400 (malformed body), 401, 404 (random UUID), and 409
-- [x] 3.6 A PATCH carrying an `updated_at` in its body is ignored — the stored value is the module's own timestamp
+- [x] 3.5 Routes exercised against `npm run dev` confirming the JSON error contract for 400 (blank), 400 (malformed body), 401, 404 (random UUID), and 409 — 36b2500
+- [x] 3.6 A PATCH carrying an `updated_at` in its body is ignored — the stored value is the module's own timestamp — 36b2500
 
 ### Phase 4: Specialists UI
 
