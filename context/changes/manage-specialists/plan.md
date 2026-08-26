@@ -51,6 +51,7 @@ Verify by: signing in, exercising add/edit/delete against a seeded medication, w
 - **No soft delete or archival for specialists.** FR-007's archival requirement is scoped to medications. A specialist with nothing assigned carries no history worth preserving.
 - **No account-erasure work (F3).** It stays queued in `domain-schema-foundation/follow-ups/review-fixes.md`; it needs a local-stack rehearsal and it interacts with the delete guard decided here.
 - **No component-test harness.** No `@testing-library/react`, no jsdom. The island's branching logic is covered by manual verification only — recorded as an accepted gap, not an oversight.
+- **No test authoring at all in Phases 3 and 4** — decided 2026-08-26, mid-slice. Writing tests moves to a dedicated skill that is not yet installed, so `tests/integration/specialists.test.ts` is not created here and no pgTAP is added beyond Phase 1's. The existing suites still **run** as regression gates in both phases; running them is not authoring them. Phase 3 §5 keeps the full contract verbatim as the hand-off, flagged with which two assertions to write first. See "Accepted gap" for what this leaves unguarded — it is a real reduction in coverage, not a reshuffle.
 - **No mirrored (per-table) grants.** Phase 1 grants all four DML privileges uniformly. Restricting them to match each table's policy set is strictly stronger, but it turns "zero rows affected" into `42501` and so requires rewriting `append_only.test.sql`, amending `CLAUDE.md`'s documented zero-rows rule, and revisiting Phase 3's error mapping. That is a real hardening change with its own blast radius, queued in `follow-ups/review-fixes.md` → S-05 — not a rider on a toolchain bump.
 - **No cloud _writes_ of any kind.** Phase 1 does read-only reconnaissance against cloud — one `select` confirming its grants match what the migration will assert — because that read is what makes the eventual push a known no-op instead of a hope. Pushing the migration, and reconciling cloud if the read comes back wrong, both stay deliberate manual steps outside this plan, same boundary as every other cloud push here.
 - **No CI changes.** Review finding F9 (CI gates neither suite, deploys to production on push) stays queued as its own change.
@@ -342,7 +343,9 @@ No output means the step is done. Two deliberate exclusions:
 
 ### Overview
 
-Everything behind the UI: one zod schema, one data module, four routes, and an integration suite. Fully verifiable without rendering anything.
+Everything behind the UI: one zod schema, one data module, and four routes.
+
+**The integration suite that was to accompany them is deferred** — see §5. That changes what "verifiable" means for this phase: the automated criteria now prove the phase compiles, lints, and breaks nothing pre-existing, but they prove nothing about the behaviour the phase adds. Manual step 3.5 and the new 3.6 are the only checks on that, so they are not a formality here.
 
 ### Changes Required:
 
@@ -371,7 +374,9 @@ No function filters by `user_id`; RLS does that, and adding a redundant filter w
 
 **The update payload is constructed explicitly, never spread from the request body.** `updateSpecialist` builds `{ name, specialty, updated_at: new Date().toISOString() }` from the parsed zod output and passes that object to `.update()`. It must not accept a caller-supplied `updated_at`, and must not do `.update({ ...input })` over anything that reached it from a request.
 
-This is load-bearing, not stylistic. Phase 1's `check (updated_at >= created_at)` closes only the backdating half of impl-review F8: the UPDATE policies constrain no columns, and `database.types.ts` exposes `updated_at` on `Update`, so a client can still set it to any **future** value. Spreading a request body into `.update()` would make this new JSON API a more convenient route to the exact defect the slice claims to close. There is no database-level alternative to check against — revoking column UPDATE from `authenticated` would block the module's own write, since it runs as that same role, and a trigger is ruled out by the schema's no-procedural-code property. The application path is the only lever, which is why it is specified here and asserted in the tests rather than left to habit.
+This is load-bearing, not stylistic. Phase 1's `check (updated_at >= created_at)` closes only the backdating half of impl-review F8: the UPDATE policies constrain no columns, and `database.types.ts` exposes `updated_at` on `Update`, so a client can still set it to any **future** value. Spreading a request body into `.update()` would make this new JSON API a more convenient route to the exact defect the slice claims to close. There is no database-level alternative to check against — revoking column UPDATE from `authenticated` would block the module's own write, since it runs as that same role, and a trigger is ruled out by the schema's no-procedural-code property. The application path is the only lever, which is why it is specified here rather than left to habit.
+
+**With test authoring deferred (see §5), nothing automated holds this rule.** It was to be asserted in `tests/integration/specialists.test.ts`; until that lands, the only checks are this specification, code review, and manual step 3.5. Treat a `.update({ ...input })` appearing anywhere on this path as a defect regardless of whether anything currently fails.
 
 The same rule applies to `createSpecialist`: `created_at`, `updated_at`, `id`, and `user_id` all come from column defaults and are never passed.
 
@@ -401,24 +406,26 @@ Guard `request.json()` in `try`/`catch` — a malformed body must produce a 400 
 
 A second short subsection records the design convention, so S-02/S-03/S-04 do not re-litigate it: white/slate surfaces with green as a rationed accent; green means primary-action/active/healthy and red means destructive/error; colour comes from the `:root` tokens in `src/styles/global.css` and components use `bg-primary`/`text-primary` rather than hardcoded `green-*`; `green-700` for anything with text in it and `green-600` for rings and borders, because 600 fails AA on white at 3.26:1; and only `:root` is live — the `.dark` block is dead and there is no dark mode.
 
-#### 5. Integration tests
+#### 5. Integration tests — deferred, 2026-08-26
 
-**File**: `tests/integration/specialists.test.ts`
+**No test code is written in this phase.** Test authoring was pulled out of this slice by explicit decision and assigned to a dedicated skill that is not yet installed. `tests/integration/specialists.test.ts` is **not** created here.
 
-**Intent**: Cover the module against a real database through PostgREST, which is where RLS and the constraints actually apply.
+The existing suites still run as regression gates — running them is not authoring them, they cost seconds against a stack that is already up, and they are what catches a Phase 3 change breaking Phase 1's schema or the existing auth paths.
 
-**Contract**: Using `createAuthenticatedClient` from the existing helper — create, list, update, delete round trip; blank and whitespace-only input rejected; a second user cannot see or modify the first user's specialists; `updateSpecialist` advances `updated_at` beyond `created_at`; deleting a specialist referenced by a medication fails with the mapped domain error while the row survives; deleting an unreferenced specialist succeeds. Creating the referencing medication needs a `dosage_changes`-free minimal insert — `medications` requires only `specialist_id`, `name`, and `expiry_date`.
+**What is owed, so the test skill inherits a specification rather than rediscovering one.** The contract below is the one this phase would have implemented, kept verbatim as the hand-off:
 
-Two further assertions cover the rules added above:
+Using `createAuthenticatedClient` from the existing helper — create, list, update, delete round trip; blank and whitespace-only input rejected; a second user cannot see or modify the first user's specialists; `updateSpecialist` advances `updated_at` beyond `created_at`; deleting a specialist referenced by a medication fails with the mapped domain error while the row survives; deleting an unreferenced specialist succeeds. Creating the referencing medication needs a `dosage_changes`-free minimal insert — `medications` requires only `specialist_id`, `name`, and `expiry_date`.
 
-- **A caller-supplied `updated_at` is ignored.** Call the update path with an object carrying an `updated_at` far in the future alongside a valid `name`; assert the stored value is the module's own timestamp, not the caller's. This is the regression test for the F8 half that the Phase 1 CHECK cannot reach.
-- **A missing or foreign row is not-found, not success.** Assert that updating and deleting a random UUID each produce the not-found outcome rather than reporting success, and that a second user doing the same against the first user's real specialist gets the same not-found result — proving the zero-rows case is being detected rather than swallowed.
+Two of these are **higher priority than the round trip**, because they are the only automated proof of rules this phase calls load-bearing:
+
+- **A caller-supplied `updated_at` is ignored.** Call the update path with an object carrying an `updated_at` far in the future alongside a valid `name`; assert the stored value is the module's own timestamp, not the caller's. This is the regression test for the F8 half that the Phase 1 CHECK cannot reach — and, per §2, there is no database-level alternative to fall back on. Until it exists, the application path is enforced by code review and manual step 3.5 alone.
+- **A missing or foreign row is not-found, not success.** Assert that updating and deleting a random UUID each produce the not-found outcome rather than reporting success, and that a second user doing the same against the first user's real specialist gets the same not-found result — proving the zero-rows case is being detected rather than swallowed. Note that the pre-existing cross-user isolation test does **not** cover this: it asserts only that the row survives, which stays true when the handler wrongly reports success.
 
 ### Success Criteria:
 
 #### Automated Verification:
 
-- Integration suite passes including the new file: `npm test`
+- Existing integration suite still passes, with no new file added to it: `npm test`
 - pgTAP still passes: `npm run db:test`
 - Linting passes: `npm run lint`
 - Type checking passes: `npx astro check` reports 0 errors and 0 warnings
@@ -426,8 +433,9 @@ Two further assertions cover the rules added above:
 #### Manual Verification:
 
 - Each route exercised against `npm run dev` with a signed-in session cookie, confirming the JSON error contract: a blank name returns 400 with `fieldErrors`, a malformed body returns 400 rather than 500, an unauthenticated call returns 401, a PATCH or DELETE against a random UUID returns 404 rather than 200/204, and deleting a referenced specialist returns 409
+- **A PATCH carrying an `updated_at` in its body is ignored**: send one dated far in the future alongside a valid `name`, then read the row back and confirm the stored `updated_at` is the module's own timestamp. This step is load-bearing now rather than confirmatory — with §5 deferred, it is the only check on the F8 half that no database constraint can reach
 
-**Implementation Note**: Pause for manual confirmation before proceeding.
+**Implementation Note**: Pause for manual confirmation before proceeding. Manual verification carries more weight in this phase than the plan originally assumed, because §5's automated coverage was deferred out of the slice.
 
 ---
 
@@ -512,7 +520,11 @@ Mark the active route with a green-700 underline or left border plus `aria-curre
 - Six new grant assertions (`table_privs_are`): `authenticated` holds all four DML privileges on each of the five domain tables, and `anon` holds none on `specialists`
 - Existing 57 assertions serve as the regression net for F4's behaviour-neutral policy rewrite — and, as of the CLI 2.115.0 image bump, for the grants too: their collapse from 57/57 to 14/57 is what surfaced the missing `GRANT` in the first place
 
-### Integration tests (`tests/integration/`, Vitest)
+### Integration tests (`tests/integration/`, Vitest) — deferred out of this slice, 2026-08-26
+
+**Not written here.** Test authoring was reassigned by explicit decision to a dedicated skill that is not yet installed. The existing suite still runs as a regression gate in Phases 3 and 4; no new file is added to it.
+
+The list below is therefore a **hand-off specification, not a deliverable of this slice** — see Phase 3 §5 for the full contract:
 
 - Full CRUD round trip through the module against PostgREST
 - Cross-user isolation: a second authenticated client sees and mutates nothing of the first's
@@ -520,6 +532,8 @@ Mark the active route with a green-700 underline or left border plus `aria-curre
 - `updated_at` advances on update, and a caller-supplied `updated_at` is ignored
 - A missing or foreign `id` yields not-found on both update and delete, rather than silent success
 - Delete blocked while referenced; row survives; delete succeeds once unreferenced
+
+The last two are the ones to write first when the skill lands. They are the only automated proof of rules Phase 3 §2 and §3 call load-bearing, and neither has a database-level fallback.
 
 ### Manual testing steps
 
@@ -536,7 +550,13 @@ Mark the active route with a green-700 underline or left border plus `aria-curre
 
 ### Accepted gap
 
-The island's validation and delete-disable branches have no automated coverage — installing a component-test harness was considered and deliberately excluded from this slice. Manual steps 2, 4 and 7 are the only checks on that logic.
+**Widened on 2026-08-26**, when test authoring was pulled out of the slice. As it now stands, **nothing this slice builds in Phases 3 and 4 carries automated coverage**: not the data module, not the four routes, not the island. The pre-existing pgTAP and integration suites still run, but they assert Phase 1's schema and the auth paths — nothing added after it.
+
+The two specific rules left unguarded are named in Phase 3 §2 and §5: a caller-supplied `updated_at` must be ignored, and a zero-rows match must surface as 404 rather than success. Both are application-path-only by necessity — Phase 1's CHECK cannot reach the first, and RLS's zero-rows semantics are what create the second — so deferring their tests removes the only mechanism that would catch a regression.
+
+That is a deliberate, recorded trade rather than an oversight, and the manual criteria in Phases 3 and 4 were strengthened to compensate as far as manual checks can. It is not equivalent cover: a manual step confirms the behaviour once, on the day, and cannot fail a future change.
+
+The island's validation and delete-disable branches were already uncovered before this decision — installing a component-test harness was considered and excluded during planning. Manual steps 2, 4 and 7 are the only checks on that logic.
 
 Visual and accessibility conformance is likewise manual only. No visual-regression tooling and no automated axe run in CI is in scope here; the `grep` in Phase 2 is the one mechanical check, and it can only prove the old theme is gone, not that the new one is right. If the palette starts drifting across S-02/S-03/S-04, that is the signal to add real tooling — not a reason to add it now for one screen.
 
@@ -606,7 +626,7 @@ Rollback within a phase is `npm run db:reset`. Once pushed, the `updated_at` CHE
 
 #### Automated
 
-- [ ] 3.1 Integration suite passes including the new file: `npm test`
+- [ ] 3.1 Existing integration suite still passes, with no new file added to it: `npm test`
 - [ ] 3.2 pgTAP still passes: `npm run db:test`
 - [ ] 3.3 Linting passes: `npm run lint`
 - [ ] 3.4 Type checking passes: `npx astro check` reports 0 errors and 0 warnings
@@ -614,6 +634,7 @@ Rollback within a phase is `npm run db:reset`. Once pushed, the `updated_at` CHE
 #### Manual
 
 - [ ] 3.5 Routes exercised against `npm run dev` confirming the JSON error contract for 400 (blank), 400 (malformed body), 401, 404 (random UUID), and 409
+- [ ] 3.6 A PATCH carrying an `updated_at` in its body is ignored — the stored value is the module's own timestamp
 
 ### Phase 4: Specialists UI
 
