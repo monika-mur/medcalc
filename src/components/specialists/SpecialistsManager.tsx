@@ -319,6 +319,10 @@ export default function SpecialistsManager({ initialSpecialists }: Props) {
                             <Button
                               type="button"
                               variant="outline"
+                              // Matches the submit and delete controls. Without it, opening
+                              // this editor while another row's PATCH is in flight lets the
+                              // resolving handler's `setEditingId(null)` close it again.
+                              disabled={pending}
                               onClick={() => {
                                 startEdit(specialist);
                               }}

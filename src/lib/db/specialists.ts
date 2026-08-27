@@ -22,6 +22,19 @@ export type Result<T> = { ok: true; data: T } | { ok: false; error: SpecialistEr
 const FK_VIOLATION = "23503";
 
 /**
+ * Collapsing a Postgres error to a domain kind discards its code, message and
+ * hint, and Workers observability (`wrangler.jsonc` → `observability.enabled`)
+ * is the only place a 500 on this path is visible at all. Log before
+ * discarding, or an incident here leaves no trace anywhere. Only genuinely
+ * unexpected failures come through — `still_referenced` is a domain outcome,
+ * not an incident, so it is answered without a log line.
+ */
+function logDbError(operation: string, error: { code: string; message: string }): void {
+  // eslint-disable-next-line no-console -- console is the Workers log sink; `no-console` is a repo preference, not a ban.
+  console.error(`specialists.${operation}`, { code: error.code, message: error.message });
+}
+
+/**
  * No function here filters by `user_id`. RLS does that, and a redundant filter
  * would hide a policy regression from any test that looks for one.
  */
@@ -33,6 +46,7 @@ export async function listSpecialists(client: SupabaseClient): Promise<Result<Sp
   const { data, error } = await client.from("specialists").select("*, medications(count), visits(count)").order("name");
 
   if (error) {
+    logDbError("list", error);
     return { ok: false, error: "unknown" };
   }
 
@@ -59,6 +73,7 @@ export async function createSpecialist(client: SupabaseClient, input: Specialist
     .single();
 
   if (error) {
+    logDbError("create", error);
     return { ok: false, error: "unknown" };
   }
   return { ok: true, data };
@@ -97,6 +112,7 @@ export async function updateSpecialist(
     .select();
 
   if (error) {
+    logDbError("update", error);
     return { ok: false, error: "unknown" };
   }
 
@@ -120,7 +136,11 @@ export async function deleteSpecialist(client: SupabaseClient, id: string): Prom
   const { data, error } = await client.from("specialists").delete().eq("id", id).select("id");
 
   if (error) {
-    return { ok: false, error: error.code === FK_VIOLATION ? "still_referenced" : "unknown" };
+    if (error.code === FK_VIOLATION) {
+      return { ok: false, error: "still_referenced" };
+    }
+    logDbError("delete", error);
+    return { ok: false, error: "unknown" };
   }
   if (data.length === 0) {
     return { ok: false, error: "not_found" };
