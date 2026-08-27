@@ -5,6 +5,19 @@ came from so the reasoning stays findable after this change is archived.
 
 ## Push `20260821182457` to cloud — the `anon` revoke is still local-only
 
+**Status**: ✅ **RESOLVED 2026-08-27.** Pushed with `npx supabase db push` after
+a `--dry-run` confirmed exactly one pending migration, no seeds and no roles.
+`migration list` now shows `20260821182457` on **both** Local and Remote.
+
+Verified against the cloud SQL Editor with the query below: **5 rows, all
+`authenticated`, no `anon` row on any table** — down from the 10 rows measured on
+2026-08-25. The defence-in-depth gap is closed; production now holds the two
+mechanisms the design intends rather than one.
+
+The rest of this entry is kept as written, because the reasoning is the part
+worth preserving — and because the same `anon`-inherits-DML condition will apply
+to any table added to `public` under an older platform default.
+
 **Source**: impl-review finding F4 (WARNING, Scope Discipline), 2026-08-26. The
 underlying condition was found earlier, by Phase 1 manual step 1.8 on 2026-08-25,
 and analysed in `change.md` → _Post-review: the schema was missing every GRANT_.
