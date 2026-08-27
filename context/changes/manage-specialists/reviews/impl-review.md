@@ -23,19 +23,20 @@
 
 **Re-verified after the two code fixes** (`specialists.ts`, `SpecialistsManager.tsx`):
 
-| Check             | Result                                       |
-| ----------------- | -------------------------------------------- |
-| `npm run lint`    | 0 errors, 0 warnings                         |
-| `npx astro check` | 0 errors, 0 warnings, 5 hints (pre-existing) |
-| `npm run build`   | Complete, server built in 15.3s              |
-| `npm test`        | **Not run** — local Supabase stack was down  |
-| `npm run db:test` | **Not run** — local Supabase stack was down  |
+| Check              | Result                                        |
+| ------------------ | --------------------------------------------- |
+| `npm run lint`     | 0 errors, 0 warnings                          |
+| `npx astro check`  | 0 errors, 0 warnings, 5 hints (pre-existing)  |
+| `npm run build`    | Complete, server built in 15.3s               |
+| `npm test`         | 15/15 passed, 1 file                          |
+| `npm run db:test`  | 70/70 passed, 4 files                         |
+| `npm run db:types` | "no change" (11620 bytes), `git status` clean |
 
-The two suites were not re-run because nothing was listening on `54321`. Both
-cover Phase 1's schema and the pre-existing auth paths, not the two files
-touched here, and neither edit changes behaviour on a tested path — `logDbError`
-only writes to the log, `disabled={pending}` is a UI prop. Re-run both when the
-stack is next up to close this out properly.
+**The stack-dependent gap is closed.** The two suites were initially skipped
+because Docker was unavailable in the triage session and nothing was listening on
+`54321`. Docker was started and `npx supabase start` brought the stack up in the
+same session; both suites then ran green, along with `db:types`. Nothing in this
+report now rests on an unverified check.
 
 A dev server was confirmed **not** running before `npm run build`, per
 `lessons.md` → _Never run a production build against a live dev server_.
