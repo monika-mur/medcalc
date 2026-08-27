@@ -54,6 +54,7 @@ A signed-in user sees every medication they track, each with its current dosage,
 ## Open Risks & Assumptions
 
 - **The three-insert create ships untested, and its failure mode is invisible by design.** A partial result looks exactly like a legitimate "stopped" or "out of stock" medication, so manual walking cannot distinguish them. This is the single largest accepted risk in the slice.
+- **The same-day dosage replace is a DELETE-then-INSERT, made reversible by a compensating write** (plan review, 2026-08-27). The DELETE returns the value it removes and the module re-inserts it if the replacement INSERT fails. Without that, a failed correction would silently delete the user's previous dosage and the row would render as a deliberate *Not used*. The compensating INSERT can itself fail; that is the residual exposure and it logs distinctly.
 - **`.upsert()` is unusable on `dosage_changes` and `supply_events`** — PostgREST compiles it to `ON CONFLICT DO UPDATE` and neither table has an UPDATE policy. An implementer reaching for it will get a confusing RLS failure; Phase 4 writes the rule into `CLAUDE.md`.
 - **Dates must be computed in UTC on the server.** The DELETE policy compares against Postgres `current_date`; a browser-derived date disagrees with it for part of every day, and the symptom appears only near midnight.
 - **The correction path reads before it writes**, so two tabs correcting at once race with the later write winning on a stale base. Accepted at single-user volume; S-04's `recount` is the structural fix.

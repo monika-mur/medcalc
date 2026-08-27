@@ -79,6 +79,8 @@ The data module owns all multi-statement sequencing. A route never issues two wr
 
 **`.upsert()` cannot be used on `dosage_changes`.** PostgREST compiles upsert to `INSERT … ON CONFLICT DO UPDATE`; the table has no UPDATE policy, so the conflict branch is refused by RLS and the call fails rather than replacing the row. Setting today's dosage is therefore an explicit DELETE-then-INSERT, in that order: the DELETE is a no-op affecting zero rows when no row exists today, so one code path serves both first-set and same-day correction. Attempt order matters — INSERT-first-then-recover-from-23505 costs an extra round trip on the correction path and leaves the same non-atomic window.
 
+**That window destroys data, so the DELETE must be reversible.** If the INSERT fails after the DELETE has landed, the user's *previous* dosage is gone — and because `listMedications` reads "no row ⇒ 0" and the status precedence maps `current_dosage === 0` to `not_used`, the loss renders as the deliberate "I have stopped taking this" state. The route returns 500, but a reload shows a plausible row and nothing tells the user a value was deleted. The DELETE therefore chains `.select("daily_dosage")` to capture what it removed (the DELETE-with-RETURNING pattern is already proven at `src/lib/db/specialists.ts:136-147`), and on INSERT failure the module re-inserts the captured value before returning the error, so a 500 honestly means "nothing changed". The compensating INSERT can itself fail; that case logs under its own operation name so the Workers log can distinguish it from an ordinary failure. This is the one place in the slice where a partial result is *not* a legitimate domain state.
+
 **Dates are computed in UTC, on the server, never in the browser.** `dosage_changes_delete_future_own` compares `effective_date` against Postgres `current_date`, which is UTC on Supabase. A date derived from the visitor's local clock disagrees with it for part of every day, and the symptom — "I can't correct the dosage I just set" — would appear only near midnight and only for some users. The data module derives `today` itself; no route or island sends a date for `effective_date` or `occurred_on`.
 
 **A starting quantity of `0` writes no `supply_events` row at all.** `supply_events_refill_is_positive` rejects a zero-delta refill, and there is nothing to record: a medication with no supply events reads as quantity 0, which is the intended state. The create path skips the third insert rather than reaching for `adjustment` to force a row into existence.
@@ -152,12 +154,12 @@ The whole domain lives here. Four zod schemas and one data module; no route or c
 
 **Contract**:
 
-- `MedicationErrorKind = "not_found" | "no_specialist" | "unknown"` — `no_specialist` maps the FK violation raised when `specialist_id` names a specialist that does not exist or belongs to another user.
+- `MedicationErrorKind = "not_found" | "no_specialist" | "unknown"` — `no_specialist` maps the FK violation (`23503`) raised when `specialist_id` names a specialist that does not exist or belongs to another user. It answers **`400` with `fieldErrors.specialist_id`**, not `409`: `CLAUDE.md` → _API conventions_ reserves `409` for "blocked by references" — a delete refused because children point at the row, which is `deleteSpecialist`'s case and the opposite direction of travel. Here the reference is unresolvable, the value came from a form `<select>`, and a field error is the shape the island can act on. S-03 maps the same violation the same way; do not "restore" this to `409`.
 - `MedicationView` — the row plus `specialist` (id, name, specialty), `current_dosage: number`, `quantity_on_hand: number`, and `status`.
 - `listMedications(client)` → `Result<MedicationView[]>`. One query embedding `specialists(…)`, `dosage_changes(daily_dosage, effective_date)` and `supply_events(quantity_delta)`, ordered by `name`, **not** filtered on `archived_at` — the island owns the toggle. Folds each row in TypeScript: current dosage is the `daily_dosage` of the row with the greatest `effective_date` not after today (no row ⇒ `0`); quantity is the sum of every `quantity_delta` (no rows ⇒ `0`). This is the S-04 replacement point — when the current-state views land, this function's body changes and its signature does not.
-- `createMedication(client, input)` → `Result<MedicationView>`. Three ordered inserts: `medications` (with `form: "solid"` written explicitly), then `dosage_changes` at today's UTC date, then — **only when `quantity > 0`** — a `refill` event. A failure after the first insert leaves a legitimate row (see below) and is reported as success with whatever landed, not as a create failure.
+- `createMedication(client, input)` → `Result<MedicationView>`. Three ordered inserts: `medications` (`form` can be left to its `not null default 'solid'` at `20260813185255_domain_schema.sql:64` — writing it explicitly is harmless but buys nothing; what actually has to hold is that **all four** liquid columns stay NULL, `opened_on` included, or `medications_liquid_fields_match_form` rejects the row), then `dosage_changes` at today's UTC date, then — **only when `quantity > 0`** — a `refill` event. A failure after the first insert leaves a legitimate row (see below) and is reported as success with whatever landed, not as a create failure.
 - `updateMedicationDetails(client, id, input)` → `Result<MedicationView>`. Explicit payload of `name`, `specialist_id`, `expiry_date`, `updated_at`; never a spread. `.select()` for the zero-row 404.
-- `setDosage(client, id, daily_dosage)` → `Result<MedicationView>`. DELETE where `medication_id = id and effective_date = today`, then INSERT. See _Critical Implementation Details_ for why `.upsert()` is not an option.
+- `setDosage(client, id, daily_dosage)` → `Result<MedicationView>`. DELETE where `medication_id = id and effective_date = today`, chaining `.select("daily_dosage")` so the removed value comes back, then INSERT. **If the INSERT fails, re-insert the captured value before returning the error**, and log that compensating write under its own operation name. See _Critical Implementation Details_ for why `.upsert()` is not an option and why the DELETE must be reversible.
 - `recordSupply(client, id, input)` → `Result<MedicationView>`. A `refill` inserts `{ event_type: "refill", quantity_delta: amount }`. A `correction` reads the current ledger sum, computes `counted − sum`, returns the unchanged row without writing when that delta is `0`, and otherwise inserts `{ event_type: "adjustment", quantity_delta: delta }`. `counted_quantity` and `projected_quantity` stay null — the CASE CHECK requires that for a non-recount.
 - `setArchived(client, id, archived)` → `Result<MedicationView>`. Sets `archived_at` to now or null, plus `updated_at`. Chained `.select()`.
 
@@ -183,8 +185,10 @@ Expiry is reported separately as a boolean, not folded into `status`, because a 
 
 - Read the module against `src/lib/db/specialists.ts` and confirm the `Result`, logging, and `.select()` conventions match
 - Confirm no `.upsert(` appears anywhere in the file
+- Confirm `setDosage` captures the deleted row's `daily_dosage` and re-inserts it when the replacement INSERT fails, and that the compensating write logs under its own operation name
+- Run `listMedications` against the local stack and confirm all three embeds resolve and the fold returns the expected current dosage and quantity. A PostgREST `Could not embed` failure is a runtime 300, not a type error, so neither lint nor build can catch it — and no existing code embeds row-level child relations, only the `count` aggregates at `src/lib/db/specialists.ts:42-59`, whose own comment records that the composite-FK embed had to be verified against the stack rather than assumed
 
-**Implementation Note**: Nothing in this phase touches the database at run time, so it needs no claim on the shared stack and can proceed while the S-03 session works. Pause for manual confirmation before Phase 3.
+**Implementation Note**: Writing the schemas and the module touches no database, so that work can proceed freely while the S-03 session works. The `listMedications` check above is the exception — it issues a real query and needs the stack in this worktree's shape, so claim it for that one step and release. Pause for manual confirmation before Phase 3.
 
 ---
 
@@ -192,7 +196,7 @@ Expiry is reported separately as a boolean, not folded into `status`, because a 
 
 ### Overview
 
-Four route files, each a thin adapter: authenticate, resolve the client, guard the body, parse with the shared schema, delegate one call to the data module, map the error kind onto a status.
+Five route files, each a thin adapter: authenticate, resolve the client, guard the body, parse with the shared schema, delegate one call to the data module, map the error kind onto a status.
 
 ### Changes Required
 
@@ -202,7 +206,7 @@ Four route files, each a thin adapter: authenticate, resolve the client, guard t
 
 **Intent**: List and create. Mirrors `src/pages/api/specialists/index.ts` line for line.
 
-**Contract**: `GET` → `200` with `MedicationView[]`, `401` unauthenticated, `500` on `unknown`. `POST` validates with `medicationCreateSchema` → `201` with the created `MedicationView`; `400` on malformed JSON or validation failure; `409` on `no_specialist` with a message telling the user to pick an existing specialist. Only `parsed.data` reaches the module.
+**Contract**: `GET` → `200` with `MedicationView[]`, `401` unauthenticated, `500` on `unknown`. `POST` validates with `medicationCreateSchema` → `201` with the created `MedicationView`; `400` on malformed JSON or validation failure; `400` on `no_specialist`, carrying `fieldErrors.specialist_id` so the island renders it under the specialist `<select>` exactly as a zod failure would. Only `parsed.data` reaches the module.
 
 #### 2. Item route
 
@@ -210,7 +214,7 @@ Four route files, each a thin adapter: authenticate, resolve the client, guard t
 
 **Intent**: Edit the medication's own columns. Mirrors `src/pages/api/specialists/[id].ts`, including its `readId` uuid guard and the reason a non-uuid segment answers `404` rather than `500`.
 
-**Contract**: `PATCH` validates with `medicationDetailsSchema` → `200` with the updated `MedicationView`; `404` on `not_found`; `409` on `no_specialist`. **No `DELETE` export** — FR-007 archives, and the database has no DELETE policy to back one.
+**Contract**: `PATCH` validates with `medicationDetailsSchema` → `200` with the updated `MedicationView`; `404` on `not_found`; `400` on `no_specialist`, again with `fieldErrors.specialist_id`. **No `DELETE` export** — FR-007 archives, and the database has no DELETE policy to back one.
 
 #### 3. Dosage route
 
@@ -242,13 +246,13 @@ Four route files, each a thin adapter: authenticate, resolve the client, guard t
 
 - `npm run lint` passes with 0 errors and 0 warnings
 - `npm run build` succeeds
-- Every route guards `context.locals.user` and a null client before any work: `grep -c "Sign in to continue" src/pages/api/medications/**/*.ts` matches the number of exported handlers
+- Every route guards `context.locals.user` and a null client before any work: `grep -rn "Sign in to continue" src/pages/api/medications/ | wc -l` equals the number of exported handlers (six across the five files: `GET` and `POST` on the collection, `PATCH` on the item, and a `POST` on each of dosage, supply, and archive). Use `grep -r`, not a `**` glob: bash without `globstar` expands `**` as a single `*`, which would silently skip `index.ts` and `[id].ts` and check only the nested files
 - No route spreads a request body: `grep -rn "\.\.\.body\|\.\.\.parsed" src/pages/api/medications/` returns nothing
 
 #### Manual Verification
 
 - With the dev server running (and **no build running concurrently** — `lessons.md` → _Never run a production build against a live dev server_), exercise each route with the browser devtools console against a real session: create, patch, set dosage twice in one minute (the second must succeed — this is Phase 1's payoff), refill, correct downward, archive, restore
-- A `PATCH` naming another user's `specialist_id` answers `409`, not `500`
+- A `PATCH` naming another user's `specialist_id` answers `400` with `fieldErrors.specialist_id`, not `500`
 - A malformed body answers `400` in the `{ error: { message } }` shape
 - A `POST` to the create route carrying `form: "liquid"` is rejected
 
@@ -340,7 +344,7 @@ Every badge carries a word, never colour alone. The status label must read as a 
 
 ## Testing Strategy
 
-**This slice adds no automated tests.** Explicit decision on 2026-08-27: a dedicated test slice will cover the medications data layer, S-01's still-queued specialists tests, and the island branches together. The specification for what that slice must assert is written to `context/changes/manage-medications/follow-ups/deferred-tests.md` during Phase 1, so it lands in the queue that gets read rather than only in this plan.
+**This slice adds no automated tests.** Explicit decision on 2026-08-27: a dedicated test slice will cover the medications data layer, S-01's still-queued specialists tests, and the island branches together. The specification for what that slice must assert already exists at `context/changes/manage-medications/follow-ups/deferred-tests.md`, written alongside this plan, so it sits in the queue that gets read rather than only in this document.
 
 What still runs, as a regression net rather than as new coverage:
 
@@ -366,6 +370,22 @@ One migration, local only. It is a policy relaxation, so it is safe to apply to 
 **Rollback**: re-run `alter policy` with the original `> current_date` predicate and rename back. No data is destroyed by either direction.
 
 **Shared-stack discipline**: `supabase/config.toml` pins `project_id` and fixed ports, so `npm run db:reset` from this worktree removes the S-03 worktree's schema, not merely its rows. Claim the stack for Phase 1's database steps and for Phase 3's and Phase 4's manual walks, and release between. This slice runs `db:types` **nowhere** — a policy change alters no types — which removes the quiet failure mode from that lesson.
+
+## Parallel-slice coordination
+
+S-03 (`manage-doctor-visits`) is planned in a sibling worktree and edits **five of the same files**. A trial merge of the two branches already conflicts *today*, before either has written a line of code — both flipped their own roadmap row from `proposed` to `planning` on adjacent lines of the same table.
+
+| File | S-02 (`manage-medications`) writes | S-03 (`manage-doctor-visits`) writes |
+| ---- | ---------------------------------- | ------------------------------------ |
+| `context/foundation/roadmap.md` | its own row + status block -> `planning` | its own row + status block -> `planning` |
+| `src/middleware.ts:4` | appends `"/medications"` to `PROTECTED_ROUTES` | appends `"/visits"` |
+| `src/components/Topbar.astro:4-7` | inserts a `Medications` nav entry | inserts a `Visits` nav entry |
+| `src/components/form/FormField.tsx` | consumes it unchanged | adds a `${id}-hint` id and widens `aria-describedby` |
+| `CLAUDE.md` | two rules at the tail of `## Domain schema` | a dates rule and a `src/components/form/` rule |
+
+`src/middleware.ts:4` is the certain one: a single-line array literal that both branches rewrite, so the conflict is unavoidable and the resolution unambiguous. `Topbar.astro` takes two entries at the same insertion point. None of this is hard to resolve; the risk is resolving it blind and silently dropping one slice's route guard or nav entry.
+
+**Rule**: whichever slice merges second re-applies its own one-liners by hand rather than accepting either side of a conflict hunk, then confirms `PROTECTED_ROUTES` contains **both** `/medications` and `/visits`, and the topbar renders **both** entries. S-02's requested `navLinks` order (Medications between Dashboard and Specialists) will not survive a merge on its own and must be re-checked at that point.
 
 ## References
 
@@ -394,7 +414,7 @@ One migration, local only. It is a policy relaxation, so it is safe to apply to 
 
 - [ ] 1.5 A `dosage_changes` row at `effective_date = current_date` deletes; one at `current_date - 1` does not
 - [ ] 1.6 The renamed policy exists in `pg_policy` and the old name does not
-- [ ] 1.7 `follow-ups/deferred-tests.md` written with the specification for the future test slice
+- [x] 1.7 `follow-ups/deferred-tests.md` written with the specification for the future test slice — landed with the plan commit, before implementation starts
 
 ### Phase 2: Validation schema and data module
 
@@ -409,6 +429,8 @@ One migration, local only. It is a policy relaxation, so it is safe to apply to 
 
 - [ ] 2.5 Module conventions match `src/lib/db/specialists.ts`
 - [ ] 2.6 No `.upsert(` anywhere in the file
+- [ ] 2.7 `setDosage` captures the deleted dosage and re-inserts it if the replacement INSERT fails
+- [ ] 2.8 `listMedications` runs against the local stack: three embeds resolve and the fold returns the expected dosage and quantity
 
 ### Phase 3: API routes
 
@@ -422,7 +444,7 @@ One migration, local only. It is a policy relaxation, so it is safe to apply to 
 #### Manual
 
 - [ ] 3.5 Create, patch, dosage-twice-in-a-minute, refill, correct, archive, restore all answer as specified
-- [ ] 3.6 A `PATCH` naming another user's `specialist_id` answers 409
+- [ ] 3.6 A `PATCH` naming another user's `specialist_id` answers 400 with `fieldErrors.specialist_id`
 - [ ] 3.7 A malformed body answers 400 in the contract's shape
 - [ ] 3.8 A create carrying `form: "liquid"` is rejected
 
