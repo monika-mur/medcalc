@@ -170,3 +170,35 @@ single `eslint-disable-next-line no-console`, because `no-console` is `warn` and
 every phase here is verified at "0 errors, 0 warnings".
 
 **Applies to**: plan, implement, impl-review
+
+## Reset the database from your own worktree before you use it
+
+**Context**: Any session working a slice in a `git worktree` while another
+session works a different slice in a sibling worktree — the S-02 (medications)
+and S-03 (visits) split, and the S-05 / S-06 pair that follows it. All
+worktrees share one local Supabase stack, because `supabase/config.toml` is
+committed and pins `project_id = "medcalc"` plus fixed ports (API 54321, DB
+54322), so the CLI keys the same containers no matter which directory invokes
+it.
+
+**Problem**: `supabase db reset` re-applies migrations from the *invoking*
+worktree's `supabase/migrations/`, never the union of both. Once each slice
+adds its own migration the two sets diverge, so a reset from the medications
+worktree yields a database holding master's migrations plus that slice's — and
+no visits tables at all. It does not merely wipe the other agent's rows, it
+removes the other agent's schema, and the neighbouring session then fails
+against a database that no longer matches its branch. The quiet variant is
+worse: `npm run db:types` regenerates the *committed*
+`src/db/database.types.ts` from whatever schema happens to be applied, so
+running it while the other slice's migrations are live writes that slice's
+tables into this branch's types file, where it survives review as a plausible
+diff and lands in the wrong PR.
+
+**Rule**: Treat `npm run db:reset` as the exclusive claim on the shared stack —
+run it from your own worktree immediately before `npm test`, `npm run db:test`,
+or `npm run db:types`, and hold the claim until that work finishes. Never run
+`db:types` against a database another worktree reset. Everything that does not
+read the database (editing code, writing migration files, `npm run dev`, lint,
+build) needs no claim and runs in parallel.
+
+**Applies to**: implement, impl-review

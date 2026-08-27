@@ -77,6 +77,7 @@ Wrangler reads `.dev.vars` (not `.env`) for runtime secrets during `npm run dev`
 - `npm run db:test` — pgTAP database tests (`supabase/tests/`), run by `supabase test db` against the local database.
 - Database-level invariants (RLS, CHECK, FK, uniqueness) belong in `supabase/tests/`. Behaviour on the client path — anything that goes through PostgREST or `@supabase/supabase-js` — belongs in `tests/integration/`.
 - Both layers earn their keep: pgTAP catches a broken constraint, the integration suite catches a policy targeting the wrong role. A `check ((x = 'a') = (p and q))`-shaped constraint passed pgTAP and was caught by the integration suite; write presence constraints as `CASE`, and assert the partially-populated case in both.
+- **Every worktree shares one local stack, so `db:reset` is the exclusive claim on it.** `config.toml` pins `project_id` and fixed ports, and `supabase db reset` re-applies migrations from the *invoking* worktree only — resetting from one worktree removes the other's schema, not just its rows. Run `npm run db:reset` from your own worktree immediately before `npm test`, `npm run db:test`, or `npm run db:types`, and never run `db:types` against a database another worktree reset — it writes the other slice's tables into this branch's committed `database.types.ts`. Code edits, `npm run dev`, lint and build need no claim.
 
 ## Domain schema
 
