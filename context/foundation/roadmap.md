@@ -3,7 +3,7 @@ project: MedCalc
 version: 1
 status: draft
 created: 2026-07-04
-updated: 2026-08-21
+updated: 2026-08-27
 prd_version: 1
 main_goal: speed
 top_blocker: capacity
@@ -27,15 +27,15 @@ Individuals managing multiple chronic medications can't reliably tell whether th
 
 ## At a glance
 
-| ID   | Change ID                  | Outcome (user can …)                                                                       | Prerequisites | PRD refs                                 | Status      | GitHub                                               |
-| ---- | -------------------------- | ------------------------------------------------------------------------------------------ | ------------- | ---------------------------------------- | ----------- | ---------------------------------------------------- |
-| F-01 | domain-schema-foundation   | (foundation) domain schema exists: specialists, medications, dosage-change history, visits | —             | Business Logic (historical preservation) | in-progress | [#1](https://github.com/monika-mur/medcalc/issues/1) |
-| S-01 | manage-specialists         | add, view, and manage the specialists they see                                             | F-01          | FR-003                                   | in-progress | [#2](https://github.com/monika-mur/medcalc/issues/2) |
-| S-02 | manage-medications         | add, edit, and archive a medication with a single current daily dosage                     | F-01, S-01    | FR-004, FR-005, FR-007                   | proposed    | [#3](https://github.com/monika-mur/medcalc/issues/3) |
-| S-03 | manage-doctor-visits       | add, edit, and delete a doctor visit                                                       | F-01, S-01    | FR-009, FR-010                           | proposed    | [#4](https://github.com/monika-mur/medcalc/issues/4) |
-| S-04 | supply-status-dashboard    | see, per medication, the calculated supply-end date and color status vs. next visit        | S-02, S-03    | FR-011, US-01                            | proposed    | [#5](https://github.com/monika-mur/medcalc/issues/5) |
-| S-05 | mid-supply-dosage-change   | schedule a future dosage change and see the recalculated status                            | S-02, S-04    | FR-006, US-02                            | proposed    | [#6](https://github.com/monika-mur/medcalc/issues/6) |
-| S-06 | liquid-medication-tracking | track a liquid medication's supply using container capacity and post-opening expiry        | S-02, S-04    | FR-008                                   | proposed    | [#7](https://github.com/monika-mur/medcalc/issues/7) |
+| ID   | Change ID                  | Outcome (user can …)                                                                       | Prerequisites | PRD refs                                 | Status   | GitHub                                               |
+| ---- | -------------------------- | ------------------------------------------------------------------------------------------ | ------------- | ---------------------------------------- | -------- | ---------------------------------------------------- |
+| F-01 | domain-schema-foundation   | (foundation) domain schema exists: specialists, medications, dosage-change history, visits | —             | Business Logic (historical preservation) | done     | [#1](https://github.com/monika-mur/medcalc/issues/1) |
+| S-01 | manage-specialists         | add, view, and manage the specialists they see                                             | F-01          | FR-003                                   | done     | [#2](https://github.com/monika-mur/medcalc/issues/2) |
+| S-02 | manage-medications         | add, edit, and archive a medication with a single current daily dosage                     | F-01, S-01    | FR-004, FR-005, FR-007                   | proposed | [#3](https://github.com/monika-mur/medcalc/issues/3) |
+| S-03 | manage-doctor-visits       | add, edit, and delete a doctor visit                                                       | F-01, S-01    | FR-009, FR-010                           | proposed | [#4](https://github.com/monika-mur/medcalc/issues/4) |
+| S-04 | supply-status-dashboard    | see, per medication, the calculated supply-end date and color status vs. next visit        | S-02, S-03    | FR-011, US-01                            | proposed | [#5](https://github.com/monika-mur/medcalc/issues/5) |
+| S-05 | mid-supply-dosage-change   | schedule a future dosage change and see the recalculated status                            | S-02, S-04    | FR-006, US-02                            | proposed | [#6](https://github.com/monika-mur/medcalc/issues/6) |
+| S-06 | liquid-medication-tracking | track a liquid medication's supply using container capacity and post-opening expiry        | S-02, S-04    | FR-008                                   | proposed | [#7](https://github.com/monika-mur/medcalc/issues/7) |
 
 ## Streams
 
@@ -72,7 +72,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Blockers:** —
 - **Unknowns:** —
 - **Risk:** The Business Logic section requires medication state changes (dosage adjustments, quantity updates, archival) to be recorded as immutable, timestamped records reconstructible at any point in time — not overwritten. Designing this once, correctly, avoids a retrofit after slices have already started writing data in a simpler (mutable) shape, which would directly threaten the PRD's "calculation accuracy" guardrail.
-- **Status:** in-progress
+- **Status:** done
 
 ## Slices
 
@@ -86,7 +86,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Blockers:** —
 - **Unknowns:** —
 - **Risk:** Small and low-risk; sequenced first among slices because both medications (S-02) and visits (S-03) require an existing specialist to assign to.
-- **Status:** in-progress
+- **Status:** done
 
 ### S-02: Manage medications (single current dosage)
 
@@ -152,10 +152,10 @@ Foundations below assume these are present and do NOT re-scaffold them.
 
 | Roadmap ID | Change ID                  | Suggested issue title                                                                       | Ready for `/10x-plan` | Notes                                             | GitHub                                                                    |
 | ---------- | -------------------------- | ------------------------------------------------------------------------------------------- | --------------------- | ------------------------------------------------- | ------------------------------------------------------------------------- |
-| F-01       | domain-schema-foundation   | Design domain schema: specialists, medications, dosage-change history, visits (append-only) | yes                   | —                                                 | [#1](https://github.com/monika-mur/medcalc/issues/1) + #8–#12 sub-issues  |
-| S-01       | manage-specialists         | Add and manage specialists                                                                  | no                    | Blocked until F-01 lands                          | [#2](https://github.com/monika-mur/medcalc/issues/2)                      |
-| S-02       | manage-medications         | Add and manage medications (single current dosage)                                          | no                    | Blocked until F-01, S-01 land                     | [#3](https://github.com/monika-mur/medcalc/issues/3) + #13–#15 sub-issues |
-| S-03       | manage-doctor-visits       | Add and manage doctor visits                                                                | no                    | Blocked until F-01, S-01 land; parallel with S-02 | [#4](https://github.com/monika-mur/medcalc/issues/4) + #16–#17 sub-issues |
+| F-01       | domain-schema-foundation   | Design domain schema: specialists, medications, dosage-change history, visits (append-only) | shipped               | Done — see `## Done`                              | [#1](https://github.com/monika-mur/medcalc/issues/1) + #8–#12 sub-issues  |
+| S-01       | manage-specialists         | Add and manage specialists                                                                  | shipped               | Done — see `## Done`                              | [#2](https://github.com/monika-mur/medcalc/issues/2)                      |
+| S-02       | manage-medications         | Add and manage medications (single current dosage)                                          | yes                   | Unblocked — parallel with S-03                    | [#3](https://github.com/monika-mur/medcalc/issues/3) + #13–#15 sub-issues |
+| S-03       | manage-doctor-visits       | Add and manage doctor visits                                                                | yes                   | Unblocked — parallel with S-02                    | [#4](https://github.com/monika-mur/medcalc/issues/4) + #16–#17 sub-issues |
 | S-04       | supply-status-dashboard    | Build the supply-status dashboard                                                           | no                    | Blocked until S-02, S-03 land                     | [#5](https://github.com/monika-mur/medcalc/issues/5)                      |
 | S-05       | mid-supply-dosage-change   | Support mid-supply dosage changes (north star)                                              | no                    | Blocked until S-02, S-04 land                     | [#6](https://github.com/monika-mur/medcalc/issues/6)                      |
 | S-06       | liquid-medication-tracking | Track liquid medications                                                                    | no                    | Blocked until S-02, S-04 land; parallel with S-05 | [#7](https://github.com/monika-mur/medcalc/issues/7)                      |
@@ -178,3 +178,12 @@ This table is the clean handoff to Jira/Linear or any MCP-backed backlog.
 - **Configurable color-status thresholds:** Green/yellow/red thresholds are hardcoded in v1 (see S-04, F-01). Why parked: PRD §Non-Goals — configurable thresholds are v2.
 
 ## Done
+
+Completed items, newest first. A slice lands here when its change is implemented, reviewed, and merged — not when its code is written.
+
+| ID   | Change ID                | Outcome delivered                                                              | Completed  | Evidence                                                                                                                            |
+| ---- | ------------------------ | ------------------------------------------------------------------------------ | ---------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| S-01 | manage-specialists       | Add, list, edit, and delete specialists; delete blocked while referenced       | 2026-08-27 | [#2](https://github.com/monika-mur/medcalc/issues/2) · [PR #26](https://github.com/monika-mur/medcalc/pull/26) · live in production |
+| F-01 | domain-schema-foundation | Append-only domain schema for specialists, medications, dosage changes, visits | 2026-08-27 | [#1](https://github.com/monika-mur/medcalc/issues/1) · migrations `20260813185255`, `20260821182457` — both applied to cloud        |
+
+**Carried forward, not closed by these:** F-01's follow-ups (F2 numeric scale, F3 GDPR erasure, F9 CI gating, D-01 mirrored grants, the partial-index remark) and S-01's (`specialists-tests`, `signed-in-landing`) remain open in their change folders. Both changes are deliberately left unarchived until those queues drain.

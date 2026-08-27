@@ -123,7 +123,7 @@ found.
 - **Fix A ⭐ Recommended**: Add a `follow-ups/push-grants-migration.md` entry naming `20260821182457`, what the revoke changes on cloud, the verification query from `plan.md` → _Verifying cloud_, and the expected before/after row counts (10 → 5).
   - Strength: Costs one file and makes the outstanding production change survive archival, which is exactly what the follow-ups convention exists for.
   - Tradeoff: None beyond the file itself; the push stays a deliberate manual step, as planned.
-  - Confidence: HIGH — mirrors how F2/F3/F9/S-05 are already tracked for `domain-schema-foundation`.
+  - Confidence: HIGH — mirrors how F2/F3/F9/D-01 are already tracked for `domain-schema-foundation`.
   - Blind spot: None significant.
 - **Fix B**: Push the migration now and record the result in `change.md`.
   - Strength: Closes the real gap rather than tracking it.

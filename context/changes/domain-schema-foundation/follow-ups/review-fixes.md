@@ -166,7 +166,13 @@ without making pushes painful.
 
 ---
 
-## S-05 — Mirror table grants to each table's RLS policy set
+## D-01 — Mirror table grants to each table's RLS policy set
+
+**Renamed 2026-08-27**: this entry was previously labelled `S-05`, which collides
+with the roadmap's S-05 (mid-supply dosage change, the north star) — a different
+piece of work, wired into GitHub #6 and Linear MON-27. The roadmap ID is canonical,
+so this one moved to `D-01` (deferred item). `manage-specialists` cites the old
+label in two places; both now point here.
 
 **Source**: not an impl-review finding. Surfaced 2026-08-21 while fixing the
 missing-`GRANT` defect in S-01 Phase 1.
