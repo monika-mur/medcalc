@@ -138,3 +138,35 @@ lifetime, the cache is the suspect, not the component. A blank page served as
 mid-render after the status line is committed.
 
 **Applies to**: implement, impl-review
+
+## Log the database error before collapsing it to a domain kind
+
+**Context**: Any data module under `src/lib/db/<entity>.ts` that maps a
+`PostgrestError` onto a domain error kind and returns a `Result<T>` — the
+pattern S-01 established in `src/lib/db/specialists.ts` and that S-02
+(medications), S-03 (visits) and S-04 inherit. Also any route that answers 500
+from one of those kinds.
+
+**Problem**: `CLAUDE.md` → _API conventions_ requires that "a raw Postgres
+message never reaches a response", and S-01 implemented that correctly — but
+read it as _never observe the error at all_. All four functions did
+`if (error) return { ok: false, error: "unknown" }`, discarding code, message,
+details and hint, and a grep for `console.error` across `src/` returned zero
+matches. `wrangler.jsonc` has `observability.enabled: true`, so the Worker has a
+log sink and nothing was writing to it: a production 500 on this path produced
+no trace anywhere, leaving it undiagnosable. The gap hid a concrete failure the
+same review found — `updated_at` is stamped from the runtime clock while
+`created_at` comes from Postgres, so a clock skew trips
+`check (updated_at >= created_at)`, raises `23514`, and surfaces as an
+unexplained "Could not save the specialist" with nothing recorded. Suppressing
+the message to the client and dropping it entirely are different decisions that
+look identical in the code.
+
+**Rule**: Log an unexpected database error before collapsing it to a domain
+kind — the response body stays scrubbed, but the code and message must reach the
+Worker log. Expected domain outcomes (a `23503` answered as 409) are not
+incidents and stay unlogged. Route the calls through one helper carrying a
+single `eslint-disable-next-line no-console`, because `no-console` is `warn` and
+every phase here is verified at "0 errors, 0 warnings".
+
+**Applies to**: plan, implement, impl-review
