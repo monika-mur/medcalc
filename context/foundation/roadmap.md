@@ -31,7 +31,7 @@ Individuals managing multiple chronic medications can't reliably tell whether th
 | ---- | -------------------------- | ------------------------------------------------------------------------------------------ | ------------- | ---------------------------------------- | -------- | ---------------------------------------------------- |
 | F-01 | domain-schema-foundation   | (foundation) domain schema exists: specialists, medications, dosage-change history, visits | —             | Business Logic (historical preservation) | done     | [#1](https://github.com/monika-mur/medcalc/issues/1) |
 | S-01 | manage-specialists         | add, view, and manage the specialists they see                                             | F-01          | FR-003                                   | done     | [#2](https://github.com/monika-mur/medcalc/issues/2) |
-| S-02 | manage-medications         | add, edit, and archive a medication with a single current daily dosage                     | F-01, S-01    | FR-004, FR-005, FR-007                   | proposed | [#3](https://github.com/monika-mur/medcalc/issues/3) |
+| S-02 | manage-medications         | add, edit, and archive a medication with a single current daily dosage                     | F-01, S-01    | FR-004, FR-005, FR-007                   | planning | [#3](https://github.com/monika-mur/medcalc/issues/3) |
 | S-03 | manage-doctor-visits       | add, edit, and delete a doctor visit                                                       | F-01, S-01    | FR-009, FR-010                           | proposed | [#4](https://github.com/monika-mur/medcalc/issues/4) |
 | S-04 | supply-status-dashboard    | see, per medication, the calculated supply-end date and color status vs. next visit        | S-02, S-03    | FR-011, US-01                            | proposed | [#5](https://github.com/monika-mur/medcalc/issues/5) |
 | S-05 | mid-supply-dosage-change   | schedule a future dosage change and see the recalculated status                            | S-02, S-04    | FR-006, US-02                            | proposed | [#6](https://github.com/monika-mur/medcalc/issues/6) |
@@ -98,7 +98,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Blockers:** —
 - **Unknowns:** —
 - **Risk:** Core entity CRUD. Dosage is entered as a single daily total per FR-005 (split-dose entry is deferred to v2), which keeps the form simple and matches the speed-oriented sequencing bias.
-- **Status:** proposed
+- **Status:** planning
 
 ### S-03: Manage doctor visits
 
