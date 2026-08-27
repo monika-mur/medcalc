@@ -66,7 +66,7 @@ Subtracted: the usage-count embed and the `409` path — nothing references `vis
 
 - **Nothing prevents a duplicate visit.** The confirm dialog is a courtesy; a duplicate posted straight to the API is accepted. Harmless to S-04, whose next-visit is a minimum over future dates — but it is not an invariant and must not be read as one.
 - **Timezone comes from `user_metadata`, which is user-writable** via `auth.updateUser({ data })`. The reader treats it as hostile input and falls back to UTC, so a tampered zone degrades the grouping rather than throwing `RangeError` on the page.
-- **Users who signed up with JavaScript disabled have no stored zone** and get UTC. Their visit dated today can sit in the wrong group for part of the day.
+- **Users who signed up with JavaScript disabled have no stored zone** and get UTC — and `signin.ts` never backfills, so the gap is permanent rather than transient, and every pre-existing account is in the same position. Their visit dated today can sit in the wrong group for part of the day. The metadata value also arrives as `any` under `Record<string, any>` and must be narrowed at the call site, or `no-unsafe-argument` fails this slice's own lint gate.
 - **The clock-skew gap S-01 accepted applies here unchanged** — `updated_at` is stamped from the runtime clock while `created_at` comes from Postgres, so an edit inside the skew window can trip the CHECK and surface as a 500.
 - **This slice takes a small piece of S-04's stated scope** (`signup.ts:40` assigns the timezone fallback there). Recorded deliberately; S-04 inherits the helper rather than writing it.
 
