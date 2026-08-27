@@ -39,7 +39,7 @@ Verified by: the browser walk in Phase 2's manual criteria, a signed-out `GET /v
 
 - **No migration, and therefore no `db:types` run.** `src/db/database.types.ts` already types `visits` (`database.types.ts:202-235`) and must come back byte-identical at the end of this slice. See _Sharing the local stack with S-02_ below for why this matters more than usual right now.
 - **The specialist name needs no PostgREST embed.** `visits_specialist_fk` is `ON DELETE RESTRICT`, so every visit's `specialist_id` is guaranteed to appear in the user's specialist list — the page already fetches that list to populate the `<select>`. Resolving the name from a `Map` in the island is exact, not a heuristic, and sidesteps the composite-FK embed question S-01 had to probe for its usage count.
-- **`23503` means something different here.** In `deleteSpecialist` it means "still referenced" → 409. On a visit INSERT or UPDATE it means the chosen `specialist_id` is not a row of this user's — the composite FK carries `user_id`, so a foreign id fails it — and that is a **400 with `fieldErrors.specialist_id`**, because a form field holds a bad value.
+- **`23503` means something different here.** In `deleteSpecialist` it means "still referenced" → 409. On a visit INSERT or UPDATE it means the chosen `specialist_id` is not a row of this user's — the composite FK carries `user_id`, so a foreign id fails it — and that is a **400 with `fieldErrors.specialist_id`**, because a form field holds a bad value. S-02 originally specified `409` for the identical case; it was aligned to `400` during plan review (2026-08-27), so both slices now answer the same way and `409` keeps meaning only "blocked by references".
 - **Delete has no failure mode.** Nothing references `visits`. The only non-success outcome is the zero-rows-means-not-found case.
 - **`user_metadata` is user-writable** via `auth.updateUser({ data })` — `signup.ts:4-8` says so and validates on write. A reader must not assume the stored zone is still valid.
 - **`signup.ts:40` assigns the timezone fallback to S-04.** Building it here is a deliberate, recorded encroachment (`change.md` → _Scope taken from S-04_), taken because two independent "todays" would let the grouping and the hint disagree about the same row.
@@ -83,6 +83,10 @@ export function resolveToday(timeZone: string | undefined, now = new Date()): st
 
 The resolved string is computed **once**, in `visits.astro`, and passed to the island as a prop. The island must never call `new Date()` for this purpose — that is precisely the second "today" this design exists to prevent.
 
+**UTC is the normal path, not a degraded one.** The zone is stamped only by the inline `<script>` at `src/pages/auth/signup.astro:27-32`, and `src/pages/api/auth/signin.ts` never backfills it. So an account created with JavaScript disabled — and every account that already exists, including the ones the integration suite creates — has no stored zone at all and always resolves through the fallback. Treat the `undefined` branch as ordinary traffic when reasoning about the Upcoming/Past split, not as an edge case. Backfilling on signin is out of scope here and sits with S-04's stated ownership of the fallback (`signup.ts:40`).
+
+**The caller must narrow before calling.** `src/env.d.ts` declares `App.Locals.user` as the bare `@supabase/supabase-js` `User`, whose `user_metadata` is `Record<string, any>` — so `Astro.locals.user?.user_metadata.timezone` is `any`. `eslint.config.js:15` enables `tseslint.configs.strictTypeChecked` across all of `src/` (`disableTypeChecked` is scoped to `scripts/**` only), and handing that `any` to `resolveToday(timeZone: string | undefined)` is exactly what `@typescript-eslint/no-unsafe-argument` reports — which would fail this slice's own 0-errors-0-warnings gate. Read it as `unknown` and narrow: `const tz: unknown = Astro.locals.user?.user_metadata?.timezone;` then pass `typeof tz === "string" ? tz : undefined`. The narrow is not lint appeasement — it is the same hostile-input argument `resolveToday`'s `try`/`catch` already makes, applied one level earlier.
+
 ### The date input's own value format
 
 `<input type="date">` reads and writes `YYYY-MM-DD`, which is also Postgres's `date` wire format and the format `resolveToday` returns. Every comparison in this slice is therefore a plain string comparison, and no timezone conversion happens anywhere except inside `resolveToday`. Introducing a `Date` object on this path is how an off-by-one-day bug gets in.
@@ -125,7 +129,7 @@ The bounds are a typo guard, not a domain rule — a past date is valid and must
 
 **Contract**: Three exports, all pure and all operating on `YYYY-MM-DD` strings.
 
-- `resolveToday(timeZone: string | undefined, now?: Date): string` — see the snippet in _Critical Implementation Details_. Falls back to UTC on an absent, malformed, or `RangeError`-throwing zone.
+- `resolveToday(timeZone: string | undefined, now?: Date): string` — see the snippet in _Critical Implementation Details_. Falls back to UTC on an absent, malformed, or `RangeError`-throwing zone. The signature takes `string | undefined`, never `any`: the only source of a zone in this app is `user_metadata`, typed `Record<string, any>`, so every caller narrows first.
 - `isPast(visitDate: string, today: string): boolean` — strict `<`. A visit dated today is **not** past; it belongs in Upcoming.
 - `isFarFuture(visitDate: string, today: string): boolean` — more than two years after `today`. Implement by string-comparing against `today` with its year field incremented by 2, keeping the whole module free of `Date` arithmetic.
 
@@ -167,12 +171,20 @@ A non-UUID `id` segment is answered `404` via `z.uuid()`, matching `specialists/
 
 Only `parsed.data` reaches the module — never `body.data`, and never a spread of it.
 
+#### 5. The `typecheck` script
+
+**File**: `package.json`
+
+**Intent**: Make the type gate a named script instead of a remembered incantation, since both phases gate on it.
+
+**Contract**: add `"typecheck": "astro check"` to `scripts`. `@astrojs/check` is already installed (it sits in `dependencies`, not `devDependencies`), so nothing joins the dependency tree. This closes the follow-up raised at `context/changes/domain-schema-foundation/follow-ups/review-fixes.md:151` and never actioned. One line.
+
 ### Success Criteria:
 
 #### Automated Verification:
 
 - `npm run lint` — 0 errors, 0 warnings
-- `npx astro check` — 0 errors, 0 warnings (5 pre-existing `tseslint.config` deprecation hints are expected)
+- `npm run typecheck` — 0 errors, 0 warnings. Hints are read, not asserted: the baseline already drifted from 4 (F-01) to 5 (S-01), so pinning a count would eventually fail on an unrelated change
 - `npm test` and `npm run db:test` still pass, run **without** `db:reset` — see _Sharing the local stack with S-02_
 - `git status` shows `src/db/database.types.ts` unmodified and `supabase/migrations/` untouched
 
@@ -202,7 +214,9 @@ The select field, the island, the page, and the navigation wiring. At the end of
 
 **Intent**: A labelled native `<select>` with the same error and aria contract as `FormField`, so the two sit together on a form without looking like two component systems. Native rather than a Radix listbox because the OS wheel picker is the right control for the PRD's stated moment of use — a phone, one hand, at the doctor's — and because adding to `src/components/ui/` would collide with the S-02 worktree.
 
-**Contract**: Props mirror `FormField` exactly where they overlap — `id`, `name?`, `label`, `value`, `onChange(value: string)`, `error?`, `placeholder?` (rendered as a disabled, empty-valued first option) — plus `options: { value: string; label: string }[]`. Same `aria-invalid` / `aria-describedby` wiring to a `${id}-error` element, and the same `CircleAlert` error line. Style from the existing tokens — `border-input`, `bg-background`, the focus ring `Input` uses — never a hardcoded colour.
+**Contract**: Props mirror `FormField` exactly where they overlap — `id`, `name?`, `label`, `value`, `onChange(value: string)`, `error?`, `placeholder?` (rendered as a disabled, empty-valued first option) — plus `options: { value: string; label: string }[]`. Same `aria-invalid` / `aria-describedby` wiring to a `${id}-error` element, and the same `CircleAlert` error line.
+
+**Fix that aria contract before mirroring it.** `FormField` today points `aria-describedby` at the error id only. A `hint` renders as the `else` arm of the error ternary but carries no id and is never referenced, so it is visual-only and never announced. This slice's past-date and far-future notes *are* hints, on a screen held to AA, so the gap closes first: give the hint element a `${id}-hint` id and point `aria-describedby` at whichever of the two is showing. `SelectField` then mirrors the corrected contract rather than reproducing the defect on new code. `FormField` is shared with S-02's medication form — see _Parallel-slice coordination_. Style from the existing tokens — `border-input`, `bg-background`, the focus ring `Input` uses — never a hardcoded colour.
 
 #### 2. The island
 
@@ -227,6 +241,8 @@ The select field, the island, the page, and the navigation wiring. At the end of
 
 **Contract**: Calls `listVisits` and `listSpecialists` server-side, resolves `today` via `resolveToday(Astro.locals.user?.user_metadata.timezone)`, and renders `<VisitsManager … client:load />` inside the same page chrome `specialists.astro` uses (`Layout`, `Topbar`, `max-w-3xl`, heading, lead paragraph). A failed load renders the same bordered notice `specialists.astro:36-41` does rather than an empty list, which would be a lie.
 
+**Copy that notice, but not its branching.** `specialists.astro:9-21` sets `loadFailed` only when a query returns an error; when `createClient` returns `null` (unset `SUPABASE_URL` / `SUPABASE_KEY`, `src/lib/supabase.ts:9-11`) it falls straight through with `loadFailed = false` and an empty array. Inheriting that here is worse than it is on `/specialists`, because an empty specialist list also triggers the zero-specialists branch below: a misconfigured environment would tell the user they have no specialists and link them to a page broken in exactly the same way. So treat a null client as `loadFailed = true`, and render the zero-specialists prompt only when `!loadFailed`.
+
 `listSpecialists` is reused as-is even though its two count embeds are surplus here — a second, count-free query would duplicate the module's only list function to save one join on a handful of rows.
 
 #### 4. Navigation and route protection
@@ -242,7 +258,7 @@ The select field, the island, the page, and the navigation wiring. At the end of
 #### Automated Verification:
 
 - `npm run lint` — 0 errors, 0 warnings
-- `npx astro check` — 0 errors, 0 warnings
+- `npm run typecheck` — 0 errors, 0 warnings (hints read, not asserted)
 - `npm run build` completes (with no `astro dev` server running)
 - `npm test` and `npm run db:test` still pass, without `db:reset`
 - `git status` still shows `src/db/database.types.ts` unmodified
@@ -259,6 +275,7 @@ The select field, the island, the page, and the navigation wiring. At the end of
 - The screen is usable at 320 px with no horizontal scrolling, the date and specialist controls included
 - Every control is keyboard reachable with a visible focus ring; both dialogs trap and restore focus; the notice region announces
 - Text and controls meet AA, and no error is signalled by colour alone
+- A date hint is announced by a screen reader, not merely rendered, and still yields to a validation error when both would apply
 
 **Implementation Note**: After completing this phase and all automated verification passes, pause here for manual confirmation from the human.
 
@@ -271,6 +288,16 @@ Not a phase — the wrap-up after Phase 2's gate closes.
 - **`follow-ups/visits-tests.md`** — the test contract this slice does not write, in the shape of `manage-specialists/follow-ups/specialists-tests.md`. Lead with the same two priority assertions, since neither has a database-level fallback: a caller-supplied `updated_at` is ignored, and a missing or foreign row is not-found rather than silent success. Then the rest: CRUD round trip, cross-user isolation, a `specialist_id` belonging to another user rejected as `invalid_specialist`, the 1900–2100 bounds, and `resolveToday`'s UTC fallback on a malformed zone (the one piece of pure logic here that is trivially unit-testable and has no manual equivalent).
 - **`CLAUDE.md`** — add the two conventions this slice establishes that a future slice would otherwise have to rediscover: dates on the domain path are `YYYY-MM-DD` strings compared as strings, with `resolveToday` the only place a timezone is interpreted; and `src/components/form/` is where shared form controls live, as distinct from the never-edited `src/components/ui/`.
 - **`change.md`** — session state per phase, adaptations, and anything found that the plan did not predict.
+- **`follow-ups/specialists-page-load-guard.md`** — record that `specialists.astro` has the same null-client fall-through this slice guards against in `visits.astro`, and renders an empty list where it should render the notice. Fixing it is out of scope here (_What We're NOT Doing_ — no changes to `/specialists`), but it is now known rather than latent.
+
+### Success Criteria:
+
+#### Manual Verification:
+
+- `follow-ups/visits-tests.md` exists and leads with the two assertions that have no database-level fallback
+- `CLAUDE.md` carries the date-string convention and the `src/components/form/` convention
+- `change.md` records per-phase session state and anything the plan did not predict
+- `follow-ups/specialists-page-load-guard.md` records the inherited `specialists.astro` fall-through
 
 ## Testing Strategy
 
@@ -284,11 +311,27 @@ Not a phase — the wrap-up after Phase 2's gate closes.
 
 ## Performance Considerations
 
-Nothing here needs optimising. `visits_user_visit_date_idx` already covers the one query, both list fetches are per-user and small, and the grouping is an O(n) partition over a list that fits on a screen. The one avoidable cost — `listSpecialists`'s count embeds, surplus on this page — is left in place deliberately (see Phase 2 §3).
+Nothing here needs optimising. `visits_user_visit_date_idx` (`user_id, visit_date`) already covers the one query this slice issues — the table carries a second index, `visits_specialist_visit_date_idx` (`specialist_id, visit_date`, `domain_schema.sql:238-239`), which nothing here exercises — both list fetches are per-user and small, and the grouping is an O(n) partition over a list that fits on a screen. The one avoidable cost — `listSpecialists`'s count embeds, surplus on this page — is left in place deliberately (see Phase 2 §3).
 
 ## Migration Notes
 
 **None.** This slice adds no migration and runs no `db:reset` and no `db:types`. Both are stated as criteria precisely because the shared local stack is in use by the S-02 worktree at the same time, and either command would damage that session's database or this branch's committed types file.
+
+## Parallel-slice coordination
+
+S-02 (`manage-medications`) is planned in a sibling worktree and edits **five of the same files**. A trial merge of the two branches already conflicts *today*, before either has written a line of code — both flipped their own roadmap row from `proposed` to `planning` on adjacent lines of the same table.
+
+| File | S-02 (`manage-medications`) writes | S-03 (`manage-doctor-visits`) writes |
+| ---- | ---------------------------------- | ------------------------------------ |
+| `context/foundation/roadmap.md` | its own row + status block -> `planning` | its own row + status block -> `planning` |
+| `src/middleware.ts:4` | appends `"/medications"` to `PROTECTED_ROUTES` | appends `"/visits"` |
+| `src/components/Topbar.astro:4-7` | inserts a `Medications` nav entry | inserts a `Visits` nav entry |
+| `src/components/form/FormField.tsx` | consumes it unchanged | adds a `${id}-hint` id and widens `aria-describedby` |
+| `CLAUDE.md` | two rules at the tail of `## Domain schema` | a dates rule and a `src/components/form/` rule |
+
+`src/middleware.ts:4` is the certain one: a single-line array literal that both branches rewrite, so the conflict is unavoidable and the resolution unambiguous. `Topbar.astro` takes two entries at the same insertion point. None of this is hard to resolve; the risk is resolving it blind and silently dropping one slice's route guard or nav entry.
+
+**Rule**: whichever slice merges second re-applies its own one-liners by hand rather than accepting either side of a conflict hunk, then confirms `PROTECTED_ROUTES` contains **both** `/medications` and `/visits`, and the topbar renders **both** entries. S-02's requested `navLinks` order (Medications between Dashboard and Specialists) will not survive a merge on its own and must be re-checked at that point.
 
 ## References
 
@@ -309,7 +352,7 @@ Nothing here needs optimising. `visits_user_visit_date_idx` already covers the o
 #### Automated
 
 - [ ] 1.1 `npm run lint` — 0 errors, 0 warnings
-- [ ] 1.2 `npx astro check` — 0 errors, 0 warnings
+- [ ] 1.2 `typecheck` script added; `npm run typecheck` — 0 errors, 0 warnings
 - [ ] 1.3 `npm test` and `npm run db:test` pass, run without `db:reset`
 - [ ] 1.4 `database.types.ts` unmodified and `supabase/migrations/` untouched
 
@@ -326,7 +369,7 @@ Nothing here needs optimising. `visits_user_visit_date_idx` already covers the o
 #### Automated
 
 - [ ] 2.1 `npm run lint` — 0 errors, 0 warnings
-- [ ] 2.2 `npx astro check` — 0 errors, 0 warnings
+- [ ] 2.2 `npm run typecheck` — 0 errors, 0 warnings
 - [ ] 2.3 `npm run build` completes with no dev server running
 - [ ] 2.4 `npm test` and `npm run db:test` pass, without `db:reset`
 - [ ] 2.5 `database.types.ts` still unmodified
@@ -343,3 +386,13 @@ Nothing here needs optimising. `visits_user_visit_date_idx` already covers the o
 - [ ] 2.13 Usable at 320 px with no horizontal scrolling
 - [ ] 2.14 Keyboard reachable, focus visible, dialogs trap and restore focus
 - [ ] 2.15 AA contrast holds and no error is signalled by colour alone
+- [ ] 2.16 A date hint is announced, not just rendered, and still yields to a validation error
+
+### Close-out
+
+#### Manual
+
+- [ ] 3.1 `follow-ups/visits-tests.md` written, leading with the two no-fallback assertions
+- [ ] 3.2 `CLAUDE.md` carries the date-string and `src/components/form/` conventions
+- [ ] 3.3 `change.md` epilogue written
+- [ ] 3.4 `follow-ups/specialists-page-load-guard.md` written
