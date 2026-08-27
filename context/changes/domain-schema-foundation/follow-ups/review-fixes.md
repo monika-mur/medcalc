@@ -78,17 +78,41 @@ deletion order in the app". Pick one deliberately and record the decision.
 
 ## F4 — Wrap `auth.uid()` in RLS policies and add the missing `user_id` indexes
 
+**Status**: ✅ **RESOLVED 2026-08-25** by
+`supabase/migrations/20260821182457_grants_updated_at_guard_and_rls_perf.sql`,
+carried in the `manage-specialists` slice (S-01) rather than in its own change —
+the plan folded it into that migration deliberately. Both numbered items below
+shipped: all 16 policies now carry the wrapped predicate, and both `user_id`
+indexes exist. Verified locally at pgTAP 70/70, plus a spot-check counting **19
+`auth.uid()` occurrences, 19 wrapped, 0 bare**.
+
+Two corrections to what this entry originally said, kept visible rather than
+edited away:
+
+- **The count was 23; it is 19.** Measured against the schema during S-01 Phase 1
+  (`manage-specialists/change.md` → _Automated (1.1–1.5)_). The 23 below is
+  wrong — do not re-derive work from it.
+- **The migration is local-only.** It has not been pushed to cloud, so the
+  performance rewrite is not live in production yet. Tracked separately; the
+  `revoke … from anon` in the same file is the part with security weight.
+
+**Still open from this entry**: only the "Also noted" partial-index remark at the
+bottom. Nothing in the numbered list remains to do.
+
+---
+
 **Source**: F4 (WARNING, Safety & Quality) — `supabase/migrations/20260813185255_domain_schema.sql:265-314` (policies), `:231`, `:234` (indexes)
 
 **Why deferred**: grouped with F2/F3 — all three are migrations that want a local
 stack to verify. No live problem at MVP volumes; this is about doing the cheap
 thing before S-04 builds query paths on top of it.
 
-**What to do**, in a follow-up migration:
+**What to do**, in a follow-up migration: — _done; see Status above_
 
 1. Rewrite all 16 policies from `auth.uid() = user_id` to
    `(select auth.uid()) = user_id`. There are 23 bare occurrences and zero
-   wrapped ones. `auth.uid()` is `stable`, not `immutable`, so Postgres
+   wrapped ones (**superseded: the real count was 19**). `auth.uid()` is
+   `stable`, not `immutable`, so Postgres
    re-evaluates it per row scanned; the scalar subquery turns it into an InitPlan
    evaluated once per statement. This is Supabase's own documented RLS
    recommendation.
@@ -101,9 +125,10 @@ thing before S-04 builds query paths on top of it.
 Behaviour is identical either way, so the existing pgTAP and integration suites
 are the regression net.
 
-**Also noted**: `medications_user_id_active_idx` is partial
-(`where archived_at is null`), so the FR-007 archive view will not use it. Decide
-whether the archive path needs its own index when that screen is built.
+**Also noted** — ⏳ **still open**, not addressed by `20260821182457`:
+`medications_user_id_active_idx` is partial (`where archived_at is null`), so the
+FR-007 archive view will not use it. Decide whether the archive path needs its
+own index when that screen is built.
 
 ## F9 — Gate CI on the test suites this change added
 

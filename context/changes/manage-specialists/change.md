@@ -1,7 +1,7 @@
 ---
 change_id: manage-specialists
 title: Manage specialists — add, list, edit, and delete the specialists a user tracks
-status: implemented
+status: impl_reviewed
 created: 2026-08-20
 updated: 2026-08-26
 archived_at: null
