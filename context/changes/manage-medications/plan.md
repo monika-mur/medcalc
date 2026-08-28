@@ -312,7 +312,9 @@ Every badge carries a word, never colour alone. The status label must read as a 
 
 **Intent**: Record the two rules this slice discovered that a future slice would otherwise re-learn the hard way.
 
-**Contract**: under _Domain schema_, add that `.upsert()` is unusable on `dosage_changes` and `supply_events` because neither has an UPDATE policy, and that application-written dates (`effective_date`, `occurred_on`) are computed in UTC to agree with the `current_date` in the DELETE policy.
+**Contract**: under _Domain schema_, add that `.upsert()` is unusable on `dosage_changes` and `supply_events` because neither has an UPDATE policy, and the date rule agreed with S-03 (see _Parallel-slice coordination_ → _The cross-slice date rule_): a date column an RLS policy compares against Postgres `current_date` — today `dosage_changes.effective_date`, and `supply_events.occurred_on` by symmetry — is resolved in **UTC**, because that `current_date` is UTC.
+
+Write it as that column-scoped rule, **not** as "all application dates are UTC". S-03 resolves a visit's "today" in the user's stored zone and is right to; the two slices must land one policy with two branches, not two policies that contradict.
 
 ### Success Criteria
 
@@ -382,10 +384,31 @@ S-03 (`manage-doctor-visits`) is planned in a sibling worktree and edits **five 
 | `src/components/Topbar.astro:4-7` | inserts a `Medications` nav entry | inserts a `Visits` nav entry |
 | `src/components/form/FormField.tsx` | consumes it unchanged | adds a `${id}-hint` id and widens `aria-describedby` |
 | `CLAUDE.md` | two rules at the tail of `## Domain schema` | a dates rule and a `src/components/form/` rule |
+| date resolution | derives UTC `today` inside the data module | creates `resolveToday(timeZone)` in `src/lib/dates.ts` |
 
 `src/middleware.ts:4` is the certain one: a single-line array literal that both branches rewrite, so the conflict is unavoidable and the resolution unambiguous. `Topbar.astro` takes two entries at the same insertion point. None of this is hard to resolve; the risk is resolving it blind and silently dropping one slice's route guard or nav entry.
 
 **Rule**: whichever slice merges second re-applies its own one-liners by hand rather than accepting either side of a conflict hunk, then confirms `PROTECTED_ROUTES` contains **both** `/medications` and `/visits`, and the topbar renders **both** entries. S-02's requested `navLinks` order (Medications between Dashboard and Specialists) will not survive a merge on its own and must be re-checked at that point.
+
+### The cross-slice date rule
+
+Agreed with S-03 on 2026-08-28, before either slice writes code, because the two plans reached opposite defaults independently and each was right about its own column.
+
+- A date column an **RLS policy compares against Postgres `current_date`** is resolved in **UTC**. Today that is `dosage_changes.effective_date`, and `supply_events.occurred_on` by symmetry. `current_date` on Supabase is UTC, so a zone behind it — UTC-8 at 22:00 local writes *yesterday* — would produce a row failing `effective_date >= current_date`, leaving the dosage just set uncorrectable. That is the precise bug Phase 1's migration exists to remove, so a user-local date here would reintroduce it for every western zone.
+- A date resolved for **user-facing classification** — S-03's Upcoming/Past split — is resolved in the **user's stored zone**.
+- **The two "todays" may differ by one calendar day, and that is intended.** S-04 must not assume the dashboard's "today" and a medication's `effective_date` were resolved the same way; S-05's segment boundaries sit directly on this seam.
+
+**This slice does not import S-03's `src/lib/dates.ts`.** Depending on a file the sibling branch creates trades a merge conflict for a build dependency and destroys the parallelism both plans are built on. Keep deriving UTC `today` inside the data module; unification is the second merger's task, below.
+
+### Merge order
+
+**S-02 merges first.** It owns the migration, and S-03's plan forbids it from running `db:reset` — so S-03's suites can only ever run against the schema this slice applies. Merging S-03 first leaves this branch's migration unapplied beneath a database S-03 is not permitted to rebuild.
+
+**S-03 merges second**, carrying three reconciliation tasks beyond re-applying its own one-liners:
+
+1. `PROTECTED_ROUTES` holds **both** `/medications` and `/visits`, and the topbar renders **both** entries in the order this slice requested.
+2. Swap this slice's inline UTC `today` derivation for `resolveToday("UTC")`, so one resolver serves both slices and the `CLAUDE.md` rule becomes true of the code rather than aspirational.
+3. Migrate this slice's specialist `<select>` in `MedicationsManager` to S-03's `SelectField`, which was written against `FormField`'s prop contract for exactly this. **Do not build `SelectField` in this slice** — both branches creating the same new file is a create/create conflict, strictly worse than the inline control it would replace.
 
 ## References
 
@@ -471,4 +494,4 @@ S-03 (`manage-doctor-visits`) is planned in a sibling worktree and edits **five 
 - [ ] 4.14 Topbar shows Medications and marks it active
 - [ ] 4.15 No horizontal scrolling at 320 px, including expanded forms
 - [ ] 4.16 Keyboard-only navigation reaches every control; the archive dialog traps and restores focus
-- [ ] 4.17 `CLAUDE.md` records the upsert and UTC-date rules
+- [ ] 4.17 `CLAUDE.md` records the upsert rule and the column-scoped date rule agreed with S-03, phrased so it does not contradict S-03's user-zone resolution
