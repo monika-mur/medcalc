@@ -256,7 +256,7 @@ Five route files, each a thin adapter: authenticate, resolve the client, guard t
 - A malformed body answers `400` in the `{ error: { message } }` shape
 - A `POST` to the create route carrying `form: "liquid"` is rejected
 
-**Implementation Note**: The manual steps here read and write the local database, so they need the stack in this worktree's shape. Re-run `npm run db:reset` from here if the S-03 session has reset it since Phase 1. Pause for manual confirmation before Phase 4.
+**Implementation Note**: The manual steps here read and write the local database, so they need the stack in this worktree's shape. S-03 is forbidden from resetting it — see that plan's _Sharing the local stack with S-02_ — so Phase 1's migration is still applied and no rebuild by the sibling session has to be assumed. What that session does leave behind is **rows**: its suites write against this database without truncating. Re-run `npm run db:reset` from here only if this slice's own manual walk needs clean tables. Pause for manual confirmation before Phase 4.
 
 ---
 
