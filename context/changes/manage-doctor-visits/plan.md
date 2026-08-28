@@ -286,7 +286,7 @@ The select field, the island, the page, and the navigation wiring. At the end of
 Not a phase — the wrap-up after Phase 2's gate closes.
 
 - **`follow-ups/visits-tests.md`** — the test contract this slice does not write, in the shape of `manage-specialists/follow-ups/specialists-tests.md`. Lead with the same two priority assertions, since neither has a database-level fallback: a caller-supplied `updated_at` is ignored, and a missing or foreign row is not-found rather than silent success. Then the rest: CRUD round trip, cross-user isolation, a `specialist_id` belonging to another user rejected as `invalid_specialist`, the 1900–2100 bounds, and `resolveToday`'s UTC fallback on a malformed zone (the one piece of pure logic here that is trivially unit-testable and has no manual equivalent).
-- **`CLAUDE.md`** — add the two conventions this slice establishes that a future slice would otherwise have to rediscover: dates on the domain path are `YYYY-MM-DD` strings compared as strings, with `resolveToday` the only place a timezone is interpreted; and `src/components/form/` is where shared form controls live, as distinct from the never-edited `src/components/ui/`.
+- **`CLAUDE.md`** — add the two conventions this slice establishes that a future slice would otherwise have to rediscover: dates on the domain path are `YYYY-MM-DD` strings compared as strings, resolved per _Parallel-slice coordination_ → _The cross-slice date rule_ (`resolveToday` in the user's stored zone for display classification; **UTC** for any column an RLS policy compares against `current_date`); and `src/components/form/` is where shared form controls live, as distinct from the never-edited `src/components/ui/`. Do **not** write "`resolveToday` is the only place a timezone is interpreted" until merge task 2 below has landed — until then S-02 derives its own UTC `today` and that sentence is false on arrival.
 - **`change.md`** — session state per phase, adaptations, and anything found that the plan did not predict.
 - **`follow-ups/specialists-page-load-guard.md`** — record that `specialists.astro` has the same null-client fall-through this slice guards against in `visits.astro`, and renders an empty list where it should render the notice. Fixing it is out of scope here (_What We're NOT Doing_ — no changes to `/specialists`), but it is now known rather than latent.
 
@@ -328,10 +328,31 @@ S-02 (`manage-medications`) is planned in a sibling worktree and edits **five of
 | `src/components/Topbar.astro:4-7` | inserts a `Medications` nav entry | inserts a `Visits` nav entry |
 | `src/components/form/FormField.tsx` | consumes it unchanged | adds a `${id}-hint` id and widens `aria-describedby` |
 | `CLAUDE.md` | two rules at the tail of `## Domain schema` | a dates rule and a `src/components/form/` rule |
+| date resolution | derives UTC `today` inside the data module | creates `resolveToday(timeZone)` in `src/lib/dates.ts` |
 
 `src/middleware.ts:4` is the certain one: a single-line array literal that both branches rewrite, so the conflict is unavoidable and the resolution unambiguous. `Topbar.astro` takes two entries at the same insertion point. None of this is hard to resolve; the risk is resolving it blind and silently dropping one slice's route guard or nav entry.
 
 **Rule**: whichever slice merges second re-applies its own one-liners by hand rather than accepting either side of a conflict hunk, then confirms `PROTECTED_ROUTES` contains **both** `/medications` and `/visits`, and the topbar renders **both** entries. S-02's requested `navLinks` order (Medications between Dashboard and Specialists) will not survive a merge on its own and must be re-checked at that point.
+
+### The cross-slice date rule
+
+Agreed with S-02 on 2026-08-28, before either slice writes code, because the two plans reached opposite defaults independently and each was right about its own column.
+
+- A date resolved for **user-facing classification** — this slice's Upcoming/Past split, and the inline hints that read from the same value — is resolved in the **user's stored zone** via `resolveToday`. Unchanged from _Resolving "today" from a timezone_ above.
+- A date column an **RLS policy compares against Postgres `current_date`** is resolved in **UTC** instead. This slice writes no such column — `visit_date` is an unconstrained `date` with no policy predicate on it — but S-02's `dosage_changes.effective_date` is one, and `current_date` on Supabase is UTC: a zone behind it would write yesterday and the row would fail `effective_date >= current_date`, leaving a just-set dosage uncorrectable.
+- **The two "todays" may differ by one calendar day, and that is intended.** Do not "fix" the divergence by routing S-02's writes through the user's zone; it reintroduces the bug S-02's migration removes. S-04 must not assume the dashboard's "today" and a medication's `effective_date` were resolved the same way.
+
+`resolveToday`'s signature already serves both branches: pass the user's zone for display, the literal `"UTC"` for a policy-compared column. Keep the `string | undefined` typing and the `RangeError` fallback exactly as specified — the UTC caller depends on neither, but the shared entry point is what makes the rule enforceable.
+
+### Merge order
+
+**S-02 merges first.** It owns the migration, and this slice is forbidden from running `db:reset`, so these suites can only ever run against the schema S-02 applies. Merging this slice first leaves S-02's migration unapplied beneath a database this session is not permitted to rebuild.
+
+**This slice merges second**, carrying three reconciliation tasks beyond re-applying its own one-liners:
+
+1. `PROTECTED_ROUTES` holds **both** `/medications` and `/visits`, and the topbar renders **both** entries in the order S-02 requested.
+2. Swap S-02's inline UTC `today` derivation for `resolveToday("UTC")`, so one resolver serves both slices and the `CLAUDE.md` rule becomes true of the code rather than aspirational.
+3. Migrate S-02's specialist `<select>` in `MedicationsManager` to this slice's `SelectField`. It was written against `FormField`'s prop contract for exactly this, and S-02 was deliberately left building the inline control instead: both branches creating `src/components/form/SelectField.tsx` is a create/create conflict, strictly worse than the duplication it would remove.
 
 ## References
 
