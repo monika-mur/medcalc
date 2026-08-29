@@ -33,6 +33,11 @@ export function FormField({
   endContent,
 }: FormFieldProps) {
   const errorId = `${id}-error`;
+  const hintId = `${id}-hint`;
+  // Whichever of the two is showing is the one described. A hint that is
+  // rendered but never referenced is visual-only and silent to a screen
+  // reader, which is what this pointed at before S-03 gave the hint an id.
+  const describedBy = error ? errorId : hint ? hintId : undefined;
 
   return (
     <div>
@@ -55,7 +60,7 @@ export function FormField({
           }}
           placeholder={placeholder}
           aria-invalid={error ? true : undefined}
-          aria-describedby={error ? errorId : undefined}
+          aria-describedby={describedBy}
           className={cn(icon && "pl-10", endContent && "pr-10")}
         />
         {endContent}
@@ -70,9 +75,9 @@ export function FormField({
           <CircleAlert className="size-3 shrink-0" />
           {error}
         </p>
-      ) : (
-        hint
-      )}
+      ) : hint ? (
+        <div id={hintId}>{hint}</div>
+      ) : null}
     </div>
   );
 }

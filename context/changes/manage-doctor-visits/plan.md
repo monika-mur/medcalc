@@ -379,28 +379,28 @@ Agreed with S-02 on 2026-08-28, before either slice writes code, because the two
 
 #### Automated
 
-- [x] 1.1 `npm run lint` — 0 errors, 0 warnings
-- [x] 1.2 `typecheck` script added; `npm run typecheck` — 0 errors, 0 warnings
-- [x] 1.3 `npm test` and `npm run db:test` pass, run without `db:reset`
-- [x] 1.4 `database.types.ts` unmodified and `supabase/migrations/` untouched
+- [x] 1.1 `npm run lint` — 0 errors, 0 warnings — c152215
+- [x] 1.2 `typecheck` script added; `npm run typecheck` — 0 errors, 0 warnings — c152215
+- [x] 1.3 `npm test` and `npm run db:test` pass, run without `db:reset` — c152215
+- [x] 1.4 `database.types.ts` unmodified and `supabase/migrations/` untouched — c152215
 
 #### Manual
 
-- [x] 1.5 JSON contract walks clean across every status in the route table
-- [x] 1.6 A `PATCH` carrying a future `updated_at` stores the module's own stamp
-- [x] 1.7 A second user's `PATCH` and `DELETE` return 404 and the row survives
-- [x] 1.8 A past-dated `POST` succeeds
-- [x] 1.9 No raw Postgres text in any response body
+- [x] 1.5 JSON contract walks clean across every status in the route table — c152215
+- [x] 1.6 A `PATCH` carrying a future `updated_at` stores the module's own stamp — c152215
+- [x] 1.7 A second user's `PATCH` and `DELETE` return 404 and the row survives — c152215
+- [x] 1.8 A past-dated `POST` succeeds — c152215
+- [x] 1.9 No raw Postgres text in any response body — c152215
 
 ### Phase 2: Visits screen
 
 #### Automated
 
-- [ ] 2.1 `npm run lint` — 0 errors, 0 warnings
-- [ ] 2.2 `npm run typecheck` — 0 errors, 0 warnings
-- [ ] 2.3 `npm run build` completes with no dev server running
-- [ ] 2.4 `npm test` and `npm run db:test` pass, without `db:reset`
-- [ ] 2.5 `database.types.ts` still unmodified
+- [x] 2.1 `npm run lint` — 0 errors, 0 warnings
+- [x] 2.2 `npm run typecheck` — 0 errors, 0 warnings
+- [x] 2.3 `npm run build` completes with no dev server running
+- [x] 2.4 `npm test` and `npm run db:test` pass, without `db:reset`
+- [x] 2.5 `database.types.ts` still unmodified
 
 #### Manual
 

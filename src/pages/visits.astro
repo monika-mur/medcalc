@@ -1,0 +1,66 @@
+---
+import Topbar from "@/components/Topbar.astro";
+import VisitsManager from "@/components/visits/VisitsManager";
+import Layout from "@/layouts/Layout.astro";
+import { resolveToday } from "@/lib/dates";
+import { listSpecialists, type SpecialistWithUsage } from "@/lib/db/specialists";
+import { listVisits, type Visit } from "@/lib/db/visits";
+import { createClient } from "@/lib/supabase";
+
+// Fetched server-side so both lists are in the first HTML response — no loading
+// flash and no round trip before first paint.
+const supabase = createClient(Astro.request.headers, Astro.cookies);
+
+let visits: Visit[] = [];
+let specialists: SpecialistWithUsage[] = [];
+
+// A null client means SUPABASE_URL / SUPABASE_KEY are unset. `specialists.astro`
+// falls through that case with an empty list; here it would be worse, because an
+// empty specialist list also drives the "add a specialist first" prompt — a
+// misconfigured environment would tell the user they have no specialists and
+// link them to a page broken in exactly the same way.
+let loadFailed = !supabase;
+
+if (supabase) {
+  const [visitsResult, specialistsResult] = await Promise.all([listVisits(supabase), listSpecialists(supabase)]);
+  if (visitsResult.ok && specialistsResult.ok) {
+    visits = visitsResult.data;
+    specialists = specialistsResult.data;
+  } else {
+    loadFailed = true;
+  }
+}
+
+// `user_metadata` is `Record<string, any>`, so this is read as `unknown` and
+// narrowed rather than handed to `resolveToday` as an `any`. The narrow is the
+// same hostile-input argument the resolver's own `try`/`catch` makes: the zone
+// is validated when signup writes it, but `auth.updateUser({ data })` can
+// replace it afterwards.
+const storedTimeZone: unknown = Astro.locals.user?.user_metadata.timezone;
+const today = resolveToday(typeof storedTimeZone === "string" ? storedTimeZone : undefined);
+---
+
+<Layout title="Visits">
+  <Topbar />
+  <main class="px-4 py-8 sm:px-6">
+    <div class="mx-auto w-full max-w-3xl">
+      <h1 class="text-foreground text-2xl font-bold">Visits</h1>
+      <p class="text-muted-foreground mt-1 text-sm">
+        Your appointments, split into upcoming and past. The next visit with a medication's specialist is what the
+        supply calculation counts down to.
+      </p>
+
+      {
+        loadFailed ? (
+          <p class="border-destructive/40 text-destructive mt-6 rounded-md border px-4 py-3 text-sm">
+            Your visits could not be loaded. Reload the page to try again.
+          </p>
+        ) : (
+          <div class="border-border bg-card mt-6 rounded-xl border p-4 shadow-sm sm:p-6">
+            <VisitsManager initialVisits={visits} specialists={specialists} today={today} client:load />
+          </div>
+        )
+      }
+    </div>
+  </main>
+</Layout>
