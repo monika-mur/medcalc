@@ -459,17 +459,17 @@ Agreed with S-03 on 2026-08-28, before either slice writes code, because the two
 
 #### Automated
 
-- [x] 3.1 `npm run lint` passes at 0 errors, 0 warnings
-- [x] 3.2 `npm run build` succeeds
-- [x] 3.3 Every handler guards `context.locals.user` and a null client
-- [x] 3.4 No request body is spread in any route
+- [x] 3.1 `npm run lint` passes at 0 errors, 0 warnings — 361baa9
+- [x] 3.2 `npm run build` succeeds — 361baa9
+- [x] 3.3 Every handler guards `context.locals.user` and a null client — 361baa9
+- [x] 3.4 No request body is spread in any route — 361baa9
 
 #### Manual
 
-- [x] 3.5 Create, patch, dosage-twice-in-a-minute, refill, correct, archive, restore all answer as specified
-- [x] 3.6 A `PATCH` naming another user's `specialist_id` answers 400 with `fieldErrors.specialist_id`
-- [x] 3.7 A malformed body answers 400 in the contract's shape
-- [x] 3.8 A create carrying `form: "liquid"` is rejected
+- [x] 3.5 Create, patch, dosage-twice-in-a-minute, refill, correct, archive, restore all answer as specified — 361baa9
+- [x] 3.6 A `PATCH` naming another user's `specialist_id` answers 400 with `fieldErrors.specialist_id` — 361baa9
+- [x] 3.7 A malformed body answers 400 in the contract's shape — 361baa9
+- [x] 3.8 A create carrying `form: "liquid"` is rejected — 361baa9
 
 ### Phase 4: Page, island, and navigation
 
