@@ -443,33 +443,33 @@ Agreed with S-03 on 2026-08-28, before either slice writes code, because the two
 
 #### Automated
 
-- [x] 2.1 `npm run lint` passes at 0 errors, 0 warnings
-- [x] 2.2 `npm run build` succeeds
-- [x] 2.3 Exactly one `console.` call in `src/lib/db/medications.ts`
-- [x] 2.4 No `.eq("user_id"` in `src/lib/db/medications.ts`
+- [x] 2.1 `npm run lint` passes at 0 errors, 0 warnings — 3a34bdd
+- [x] 2.2 `npm run build` succeeds — 3a34bdd
+- [x] 2.3 Exactly one `console.` call in `src/lib/db/medications.ts` — 3a34bdd
+- [x] 2.4 No `.eq("user_id"` in `src/lib/db/medications.ts` — 3a34bdd
 
 #### Manual
 
-- [x] 2.5 Module conventions match `src/lib/db/specialists.ts`
-- [x] 2.6 No `.upsert(` anywhere in the file
-- [x] 2.7 `setDosage` captures the deleted dosage and re-inserts it if the replacement INSERT fails
-- [x] 2.8 `listMedications` runs against the local stack: three embeds resolve and the fold returns the expected dosage and quantity
+- [x] 2.5 Module conventions match `src/lib/db/specialists.ts` — 3a34bdd
+- [x] 2.6 No `.upsert(` anywhere in the file — 3a34bdd
+- [x] 2.7 `setDosage` captures the deleted dosage and re-inserts it if the replacement INSERT fails — 3a34bdd
+- [x] 2.8 `listMedications` runs against the local stack: three embeds resolve and the fold returns the expected dosage and quantity — 3a34bdd
 
 ### Phase 3: API routes
 
 #### Automated
 
-- [ ] 3.1 `npm run lint` passes at 0 errors, 0 warnings
-- [ ] 3.2 `npm run build` succeeds
-- [ ] 3.3 Every handler guards `context.locals.user` and a null client
-- [ ] 3.4 No request body is spread in any route
+- [x] 3.1 `npm run lint` passes at 0 errors, 0 warnings
+- [x] 3.2 `npm run build` succeeds
+- [x] 3.3 Every handler guards `context.locals.user` and a null client
+- [x] 3.4 No request body is spread in any route
 
 #### Manual
 
-- [ ] 3.5 Create, patch, dosage-twice-in-a-minute, refill, correct, archive, restore all answer as specified
-- [ ] 3.6 A `PATCH` naming another user's `specialist_id` answers 400 with `fieldErrors.specialist_id`
-- [ ] 3.7 A malformed body answers 400 in the contract's shape
-- [ ] 3.8 A create carrying `form: "liquid"` is rejected
+- [x] 3.5 Create, patch, dosage-twice-in-a-minute, refill, correct, archive, restore all answer as specified
+- [x] 3.6 A `PATCH` naming another user's `specialist_id` answers 400 with `fieldErrors.specialist_id`
+- [x] 3.7 A malformed body answers 400 in the contract's shape
+- [x] 3.8 A create carrying `form: "liquid"` is rejected
 
 ### Phase 4: Page, island, and navigation
 
