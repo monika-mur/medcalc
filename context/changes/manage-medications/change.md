@@ -1,9 +1,9 @@
 ---
 change_id: manage-medications
 title: Manage medications — add, edit, archive, and restore a medication with a single current daily dosage
-status: plan_reviewed
+status: implementing
 created: 2026-08-27
-updated: 2026-08-27
+updated: 2026-08-29
 archived_at: null
 ---
 
