@@ -8,13 +8,13 @@ Give the user a `/visits` screen where they can add a doctor visit (a date and o
 
 **The database is finished.** F-01 created `visits` and S-01's migration completed it. Nothing in this slice touches `supabase/migrations/`:
 
-| Object                                        | Where                                      |
-| --------------------------------------------- | ------------------------------------------ |
-| Table, columns, composite FK, two indexes     | `20260813185255_domain_schema.sql:204-239` |
-| Four RLS policies (full CRUD over own rows)   | `:305-314`                                 |
-| `(select auth.uid())` rewrite of those four   | `20260821182457:143-151`                   |
-| `grant … to authenticated`, `revoke … anon`   | `20260821182457:80,88`                     |
-| `visits_updated_at_not_before_created_at`     | `20260821182457:102-104`                   |
+| Object                                      | Where                                      |
+| ------------------------------------------- | ------------------------------------------ |
+| Table, columns, composite FK, two indexes   | `20260813185255_domain_schema.sql:204-239` |
+| Four RLS policies (full CRUD over own rows) | `:305-314`                                 |
+| `(select auth.uid())` rewrite of those four | `20260821182457:143-151`                   |
+| `grant … to authenticated`, `revoke … anon` | `20260821182457:80,88`                     |
+| `visits_updated_at_not_before_created_at`   | `20260821182457:102-104`                   |
 
 Columns are `id`, `user_id` (`default auth.uid()`), `specialist_id`, `visit_date date`, `created_at`, `updated_at`. The FK is composite — `(specialist_id, user_id) references specialists (id, user_id) on delete restrict`.
 
@@ -63,7 +63,7 @@ The two new shared pieces are both built to be reused rather than to serve this 
 
 ### Sharing the local stack with S-02
 
-`lessons.md` → _Reset the database from your own worktree before you use it_ says `npm run db:reset` is an exclusive claim. **This slice must not take that claim.** It adds no migration, so this branch's migration set is master's — but that is **not** a strict subset of what the S-02 worktree applies. S-02's migration `ALTER`s and `RENAME`s an existing `dosage_changes` policy rather than only adding objects, so one policy differs in place rather than additively. The existing suites pass against S-02's database regardless, for reasons that hold independently of the subset argument: every pgTAP suite is wrapped in `begin` / `rollback`, the integration suite creates a uniquely-named user per test with no truncate and no zero-row expectation anywhere, and no assertion in either suite references that policy or its name. A reset from here, by contrast, would *remove* S-02's schema mid-session.
+`lessons.md` → _Reset the database from your own worktree before you use it_ says `npm run db:reset` is an exclusive claim. **This slice must not take that claim.** It adds no migration, so this branch's migration set is master's — but that is **not** a strict subset of what the S-02 worktree applies. S-02's migration `ALTER`s and `RENAME`s an existing `dosage_changes` policy rather than only adding objects, so one policy differs in place rather than additively. The existing suites pass against S-02's database regardless, for reasons that hold independently of the subset argument: every pgTAP suite is wrapped in `begin` / `rollback`, the integration suite creates a uniquely-named user per test with no truncate and no zero-row expectation anywhere, and no assertion in either suite references that policy or its name. A reset from here, by contrast, would _remove_ S-02's schema mid-session.
 
 So: run `npm test` and `npm run db:test` **without** resetting. If a suite fails in a way that looks schema-shaped, coordinate with the other session rather than reaching for `db:reset`. And never run `npm run db:types` in this slice at all — there is nothing to regenerate, and doing it against a database carrying S-02's migration would write medication tables into this branch's committed types file.
 
@@ -74,9 +74,16 @@ So: run `npm test` and `npm run db:test` **without** resetting. If a suite fails
 ```ts
 export function resolveToday(timeZone: string | undefined, now = new Date()): string {
   try {
-    return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+    return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(
+      now,
+    );
   } catch {
-    return new Intl.DateTimeFormat("en-CA", { timeZone: "UTC", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "UTC",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(now);
   }
 }
 ```
@@ -158,12 +165,12 @@ The bounds are a typo guard, not a domain rule — a past date is valid and must
 
 **Contract**:
 
-| Route                      | Outcome                                                                       |
-| -------------------------- | ----------------------------------------------------------------------------- |
-| `GET /api/visits`          | `200` array, `401` unauthenticated                                            |
-| `POST /api/visits`         | `201` created row; `400` malformed JSON, failed parse, or `invalid_specialist` |
-| `PATCH /api/visits/:id`    | `200` updated row; `400` as above; `404` missing, foreign, or non-UUID `id`   |
-| `DELETE /api/visits/:id`   | `204`; `404` missing, foreign, or non-UUID `id`                                |
+| Route                    | Outcome                                                                        |
+| ------------------------ | ------------------------------------------------------------------------------ |
+| `GET /api/visits`        | `200` array, `401` unauthenticated                                             |
+| `POST /api/visits`       | `201` created row; `400` malformed JSON, failed parse, or `invalid_specialist` |
+| `PATCH /api/visits/:id`  | `200` updated row; `400` as above; `404` missing, foreign, or non-UUID `id`    |
+| `DELETE /api/visits/:id` | `204`; `404` missing, foreign, or non-UUID `id`                                |
 
 A non-UUID `id` segment is answered `404` via `z.uuid()`, matching `specialists/[id].ts:10-18` — it would otherwise reach Postgres as `22P02` and surface as a 500, and it means the same thing as a UUID matching nothing.
 
@@ -216,7 +223,7 @@ The select field, the island, the page, and the navigation wiring. At the end of
 
 **Contract**: Props mirror `FormField` exactly where they overlap — `id`, `name?`, `label`, `value`, `onChange(value: string)`, `error?`, `placeholder?` (rendered as a disabled, empty-valued first option) — plus `options: { value: string; label: string }[]`. Same `aria-invalid` / `aria-describedby` wiring to a `${id}-error` element, and the same `CircleAlert` error line.
 
-**Fix that aria contract before mirroring it.** `FormField` today points `aria-describedby` at the error id only. A `hint` renders as the `else` arm of the error ternary but carries no id and is never referenced, so it is visual-only and never announced. This slice's past-date and far-future notes *are* hints, on a screen held to AA, so the gap closes first: give the hint element a `${id}-hint` id and point `aria-describedby` at whichever of the two is showing. `SelectField` then mirrors the corrected contract rather than reproducing the defect on new code. `FormField` is shared with S-02's medication form — see _Parallel-slice coordination_. Style from the existing tokens — `border-input`, `bg-background`, the focus ring `Input` uses — never a hardcoded colour.
+**Fix that aria contract before mirroring it.** `FormField` today points `aria-describedby` at the error id only. A `hint` renders as the `else` arm of the error ternary but carries no id and is never referenced, so it is visual-only and never announced. This slice's past-date and far-future notes _are_ hints, on a screen held to AA, so the gap closes first: give the hint element a `${id}-hint` id and point `aria-describedby` at whichever of the two is showing. `SelectField` then mirrors the corrected contract rather than reproducing the defect on new code. `FormField` is shared with S-02's medication form — see _Parallel-slice coordination_. Style from the existing tokens — `border-input`, `bg-background`, the focus ring `Input` uses — never a hardcoded colour.
 
 #### 2. The island
 
@@ -319,16 +326,16 @@ Nothing here needs optimising. `visits_user_visit_date_idx` (`user_id, visit_dat
 
 ## Parallel-slice coordination
 
-S-02 (`manage-medications`) is planned in a sibling worktree and edits **five of the same files**. A trial merge of the two branches already conflicts *today*, before either has written a line of code — both flipped their own roadmap row from `proposed` to `planning` on adjacent lines of the same table.
+S-02 (`manage-medications`) is planned in a sibling worktree and edits **five of the same files**. A trial merge of the two branches already conflicts _today_, before either has written a line of code — both flipped their own roadmap row from `proposed` to `planning` on adjacent lines of the same table.
 
-| File | S-02 (`manage-medications`) writes | S-03 (`manage-doctor-visits`) writes |
-| ---- | ---------------------------------- | ------------------------------------ |
-| `context/foundation/roadmap.md` | its own row + status block -> `planning` | its own row + status block -> `planning` |
-| `src/middleware.ts:4` | appends `"/medications"` to `PROTECTED_ROUTES` | appends `"/visits"` |
-| `src/components/Topbar.astro:4-7` | inserts a `Medications` nav entry | inserts a `Visits` nav entry |
-| `src/components/form/FormField.tsx` | consumes it unchanged | adds a `${id}-hint` id and widens `aria-describedby` |
-| `CLAUDE.md` | two rules at the tail of `## Domain schema` | a dates rule and a `src/components/form/` rule |
-| date resolution | derives UTC `today` inside the data module | creates `resolveToday(timeZone)` in `src/lib/dates.ts` |
+| File                                | S-02 (`manage-medications`) writes             | S-03 (`manage-doctor-visits`) writes                   |
+| ----------------------------------- | ---------------------------------------------- | ------------------------------------------------------ |
+| `context/foundation/roadmap.md`     | its own row + status block -> `planning`       | its own row + status block -> `planning`               |
+| `src/middleware.ts:4`               | appends `"/medications"` to `PROTECTED_ROUTES` | appends `"/visits"`                                    |
+| `src/components/Topbar.astro:4-7`   | inserts a `Medications` nav entry              | inserts a `Visits` nav entry                           |
+| `src/components/form/FormField.tsx` | consumes it unchanged                          | adds a `${id}-hint` id and widens `aria-describedby`   |
+| `CLAUDE.md`                         | two rules at the tail of `## Domain schema`    | a dates rule and a `src/components/form/` rule         |
+| date resolution                     | derives UTC `today` inside the data module     | creates `resolveToday(timeZone)` in `src/lib/dates.ts` |
 
 `src/middleware.ts:4` is the certain one: a single-line array literal that both branches rewrite, so the conflict is unavoidable and the resolution unambiguous. `Topbar.astro` takes two entries at the same insertion point. None of this is hard to resolve; the risk is resolving it blind and silently dropping one slice's route guard or nav entry.
 
@@ -372,18 +379,18 @@ Agreed with S-02 on 2026-08-28, before either slice writes code, because the two
 
 #### Automated
 
-- [ ] 1.1 `npm run lint` — 0 errors, 0 warnings
-- [ ] 1.2 `typecheck` script added; `npm run typecheck` — 0 errors, 0 warnings
-- [ ] 1.3 `npm test` and `npm run db:test` pass, run without `db:reset`
-- [ ] 1.4 `database.types.ts` unmodified and `supabase/migrations/` untouched
+- [x] 1.1 `npm run lint` — 0 errors, 0 warnings
+- [x] 1.2 `typecheck` script added; `npm run typecheck` — 0 errors, 0 warnings
+- [x] 1.3 `npm test` and `npm run db:test` pass, run without `db:reset`
+- [x] 1.4 `database.types.ts` unmodified and `supabase/migrations/` untouched
 
 #### Manual
 
-- [ ] 1.5 JSON contract walks clean across every status in the route table
-- [ ] 1.6 A `PATCH` carrying a future `updated_at` stores the module's own stamp
-- [ ] 1.7 A second user's `PATCH` and `DELETE` return 404 and the row survives
-- [ ] 1.8 A past-dated `POST` succeeds
-- [ ] 1.9 No raw Postgres text in any response body
+- [x] 1.5 JSON contract walks clean across every status in the route table
+- [x] 1.6 A `PATCH` carrying a future `updated_at` stores the module's own stamp
+- [x] 1.7 A second user's `PATCH` and `DELETE` return 404 and the row survives
+- [x] 1.8 A past-dated `POST` succeeds
+- [x] 1.9 No raw Postgres text in any response body
 
 ### Phase 2: Visits screen
 
