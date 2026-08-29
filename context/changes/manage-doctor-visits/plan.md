@@ -404,9 +404,9 @@ Agreed with S-02 on 2026-08-28, before either slice writes code, because the two
 
 #### Manual
 
-- [ ] 2.6 Signed-out redirect works; topbar shows and marks **Visits** active
-- [ ] 2.7 The grouped list is in the SSR HTML before hydration
-- [ ] 2.8 Add, edit, and delete leave the list correctly grouped and sorted
+- [x] 2.6 Signed-out redirect works; topbar shows and marks **Visits** active — 9559c16
+- [x] 2.7 The grouped list is in the SSR HTML before hydration — 9559c16
+- [x] 2.8 Add, edit, and delete leave the list correctly grouped and sorted — 9559c16
 - [ ] 2.9 Past and far-future notes appear and do not block saving
 - [ ] 2.10 The duplicate confirm dialog gates the save correctly
 - [ ] 2.11 The zero-specialists prompt replaces the form and links out

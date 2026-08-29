@@ -60,3 +60,35 @@ Two consequences worth stating plainly, because both were chosen over a stronger
 ### Plan
 
 `plan.md` (full) and `plan-brief.md` (two-pager) written 2026-08-27 across two phases plus close-out.
+
+### Session state — 2026-08-29
+
+Phase 1 landed as `c152215`. Phase 2 landed as `9559c16` (screen, `SelectField`,
+the `FormField` aria fix, middleware and topbar one-liners), with its progress
+shas recorded in `46115b6`.
+
+`master` was merged in as `0b6b74e`. That merge caught a defect this branch was
+carrying: having branched before S-02 flipped its own roadmap row, it would have
+reverted S-02 from `planning` to `proposed`. Resolved by hand per
+_Parallel-slice coordination_ — S-02's row and status block from master, S-03's
+from here. Docs only; nothing under `src/` moved.
+
+**Phase 2 manual verification is partial.** 2.6–2.8 verified in the browser and
+ticked; **2.9–2.16 remain open** — the date hints, the duplicate dialog, the
+zero-specialists prompt, the today-is-upcoming case, 320 px, keyboard and focus,
+AA contrast, and the hint's aria wiring. Close-out 3.1–3.4 is untouched.
+
+Two things the plan did not predict, both worth carrying forward:
+
+- **The S-02 worktree runs its own dev server on 4321**, so `astro dev` here
+  binds 4322 instead. `GET localhost:4321/visits` answers 404 — that is S-02's
+  build, not a fault in this slice. Check the port before reading a 404 as a bug.
+- `resolveToday` returns the same `2026-08-29` for both UTC and Europe/Warsaw
+  today, so the current manual walk cannot distinguish the stored-zone path from
+  the UTC fallback. A date near midnight, or a deliberately offset zone, is
+  needed to exercise that difference.
+
+Next session: finish 2.9–2.16 against `http://localhost:4322/visits`, then
+close-out. The delivery merge to `master` stays blocked until S-02 merges first
+(_Merge order_); S-02 is at `3a34bdd` with its Phase 3 manual checks and all of
+Phase 4 still open.
