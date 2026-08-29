@@ -396,11 +396,11 @@ Agreed with S-02 on 2026-08-28, before either slice writes code, because the two
 
 #### Automated
 
-- [x] 2.1 `npm run lint` — 0 errors, 0 warnings
-- [x] 2.2 `npm run typecheck` — 0 errors, 0 warnings
-- [x] 2.3 `npm run build` completes with no dev server running
-- [x] 2.4 `npm test` and `npm run db:test` pass, without `db:reset`
-- [x] 2.5 `database.types.ts` still unmodified
+- [x] 2.1 `npm run lint` — 0 errors, 0 warnings — 9559c16
+- [x] 2.2 `npm run typecheck` — 0 errors, 0 warnings — 9559c16
+- [x] 2.3 `npm run build` completes with no dev server running — 9559c16
+- [x] 2.4 `npm test` and `npm run db:test` pass, without `db:reset` — 9559c16
+- [x] 2.5 `database.types.ts` still unmodified — 9559c16
 
 #### Manual
 
