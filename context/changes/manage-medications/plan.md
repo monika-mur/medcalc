@@ -428,32 +428,32 @@ Agreed with S-03 on 2026-08-28, before either slice writes code, because the two
 
 #### Automated
 
-- [x] 1.1 `npm run db:reset` applies all migrations with no error
-- [x] 1.2 `npm run db:test` still reports 70 passing assertions
-- [x] 1.3 `npm test` still reports 15 passing tests
-- [x] 1.4 `npm run lint` passes at 0 errors, 0 warnings
+- [x] 1.1 `npm run db:reset` applies all migrations with no error — 3455061
+- [x] 1.2 `npm run db:test` still reports 70 passing assertions — 3455061
+- [x] 1.3 `npm test` still reports 15 passing tests — 3455061
+- [x] 1.4 `npm run lint` passes at 0 errors, 0 warnings — 3455061
 
 #### Manual
 
-- [x] 1.5 A `dosage_changes` row at `effective_date = current_date` deletes; one at `current_date - 1` does not
-- [x] 1.6 The renamed policy exists in `pg_policy` and the old name does not
+- [x] 1.5 A `dosage_changes` row at `effective_date = current_date` deletes; one at `current_date - 1` does not — 3455061
+- [x] 1.6 The renamed policy exists in `pg_policy` and the old name does not — 3455061
 - [x] 1.7 `follow-ups/deferred-tests.md` written with the specification for the future test slice — landed with the plan commit, before implementation starts
 
 ### Phase 2: Validation schema and data module
 
 #### Automated
 
-- [ ] 2.1 `npm run lint` passes at 0 errors, 0 warnings
-- [ ] 2.2 `npm run build` succeeds
-- [ ] 2.3 Exactly one `console.` call in `src/lib/db/medications.ts`
-- [ ] 2.4 No `.eq("user_id"` in `src/lib/db/medications.ts`
+- [x] 2.1 `npm run lint` passes at 0 errors, 0 warnings
+- [x] 2.2 `npm run build` succeeds
+- [x] 2.3 Exactly one `console.` call in `src/lib/db/medications.ts`
+- [x] 2.4 No `.eq("user_id"` in `src/lib/db/medications.ts`
 
 #### Manual
 
-- [ ] 2.5 Module conventions match `src/lib/db/specialists.ts`
-- [ ] 2.6 No `.upsert(` anywhere in the file
-- [ ] 2.7 `setDosage` captures the deleted dosage and re-inserts it if the replacement INSERT fails
-- [ ] 2.8 `listMedications` runs against the local stack: three embeds resolve and the fold returns the expected dosage and quantity
+- [x] 2.5 Module conventions match `src/lib/db/specialists.ts`
+- [x] 2.6 No `.upsert(` anywhere in the file
+- [x] 2.7 `setDosage` captures the deleted dosage and re-inserts it if the replacement INSERT fails
+- [x] 2.8 `listMedications` runs against the local stack: three embeds resolve and the fold returns the expected dosage and quantity
 
 ### Phase 3: API routes
 
