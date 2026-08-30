@@ -475,23 +475,23 @@ Agreed with S-03 on 2026-08-28, before either slice writes code, because the two
 
 #### Automated
 
-- [ ] 4.1 `npm run lint` passes at 0 errors, 0 warnings
-- [ ] 4.2 `npm run build` succeeds with the dev server stopped
-- [ ] 4.3 `npm run db:test` and `npm test` still green
+- [x] 4.1 `npm run lint` passes at 0 errors, 0 warnings
+- [x] 4.2 `npm run build` succeeds with the dev server stopped
+- [x] 4.3 `npm run db:test` and `npm test` still green
 
 #### Manual
 
-- [ ] 4.4 Signed out redirects to `/auth/signin`; signed in renders
-- [ ] 4.5 Zero specialists shows the explanation and link, and no add form
-- [ ] 4.6 Add with dosage 1 / quantity 30 shows Active
-- [ ] 4.7 Two dosage changes in one minute both succeed
-- [ ] 4.8 Stop taking this → dosage 0, badge Not used, row still visible
-- [ ] 4.9 Add with quantity 0 → badge Out of stock, no error
-- [ ] 4.10 Refill +20 then correct to 5 → quantity 5; repeating the correction is a no-op
-- [ ] 4.11 A past expiry date renders the expired flag
-- [ ] 4.12 Archive, Show archived, and Restore all behave as specified
-- [ ] 4.13 Reassigning the specialist updates the row
-- [ ] 4.14 Topbar shows Medications and marks it active
-- [ ] 4.15 No horizontal scrolling at 320 px, including expanded forms
-- [ ] 4.16 Keyboard-only navigation reaches every control; the archive dialog traps and restores focus
-- [ ] 4.17 `CLAUDE.md` records the upsert rule and the column-scoped date rule agreed with S-03, phrased so it does not contradict S-03's user-zone resolution
+- [x] 4.4 Signed out redirects to `/auth/signin`; signed in renders
+- [x] 4.5 Zero specialists shows the explanation and link, and no add form
+- [x] 4.6 Add with dosage 1 / quantity 30 shows Active
+- [x] 4.7 Two dosage changes in one minute both succeed
+- [x] 4.8 Stop taking this → dosage 0, badge Not used, row still visible
+- [x] 4.9 Add with quantity 0 → badge Out of stock, no error
+- [x] 4.10 Refill +20 then correct to 5 → quantity 5; repeating the correction is a no-op
+- [x] 4.11 A past expiry date renders the expired flag
+- [x] 4.12 Archive, Show archived, and Restore all behave as specified
+- [x] 4.13 Reassigning the specialist updates the row
+- [x] 4.14 Topbar shows Medications and marks it active
+- [x] 4.15 No horizontal scrolling at 320 px, including expanded forms
+- [x] 4.16 Keyboard-only navigation reaches every control; the archive dialog traps and restores focus
+- [x] 4.17 `CLAUDE.md` records the upsert rule and the column-scoped date rule agreed with S-03, phrased so it does not contradict S-03's user-zone resolution
