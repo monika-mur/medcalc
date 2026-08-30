@@ -1,7 +1,7 @@
 ---
 change_id: manage-doctor-visits
 title: Manage doctor visits — add, list, edit, and delete a visit (date + specialist)
-status: implementing
+status: implemented
 created: 2026-08-27
 updated: 2026-08-30
 archived_at: null

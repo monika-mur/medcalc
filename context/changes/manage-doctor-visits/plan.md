@@ -420,7 +420,7 @@ Agreed with S-02 on 2026-08-28, before either slice writes code, because the two
 
 #### Manual
 
-- [ ] 3.1 `follow-ups/visits-tests.md` written, leading with the two no-fallback assertions
-- [ ] 3.2 `CLAUDE.md` carries the date-string and `src/components/form/` conventions
-- [ ] 3.3 `change.md` epilogue written
-- [ ] 3.4 `follow-ups/specialists-page-load-guard.md` written
+- [x] 3.1 `follow-ups/visits-tests.md` written, leading with the two no-fallback assertions — 4e2a2d4
+- [x] 3.2 `CLAUDE.md` carries the date-string and `src/components/form/` conventions — 4e2a2d4
+- [x] 3.3 `change.md` epilogue written — 4e2a2d4
+- [x] 3.4 `follow-ups/specialists-page-load-guard.md` written — 4e2a2d4
