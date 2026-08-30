@@ -1,6 +1,7 @@
 import { useState, type SubmitEvent } from "react";
-import { Archive, ArchiveRestore, Calculator, CircleAlert, Gauge, Package, Pencil, Plus } from "lucide-react";
+import { Archive, ArchiveRestore, Calculator, Gauge, Package, Pencil, Plus } from "lucide-react";
 import { FormField } from "@/components/form/FormField";
+import { SelectField, type SelectOption } from "@/components/form/SelectField";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -107,60 +108,19 @@ async function readApiError(response: Response): Promise<{ message: string; fiel
   return { message: GENERIC_ERROR };
 }
 
-interface SpecialistSelectProps {
-  id: string;
-  value: string;
-  onChange: (value: string) => void;
-  error?: string;
-  specialists: SpecialistWithUsage[];
-}
-
 /**
- * A native `<select>` styled to match `Input`, kept local to this file on
- * purpose: S-03 introduces a shared `SelectField` in a sibling worktree, and
- * both branches creating the same new file would be a create/create conflict.
- * The second merger swaps this for that component — see the plan's
- * _Parallel-slice coordination_.
+ * The `<select>`'s options. S-02 originally carried a local `SpecialistSelect`
+ * here, deliberately: S-03 was introducing the shared `SelectField` in a
+ * sibling worktree at the same time, and both branches creating that file would
+ * have been a create/create conflict. S-03 merged second and made the swap, per
+ * its plan's _Parallel-slice coordination_ — so this file now builds only the
+ * option list and the shared component renders it.
  */
-function SpecialistSelect({ id, value, onChange, error, specialists }: SpecialistSelectProps) {
-  const errorId = `${id}-error`;
-
-  return (
-    <div>
-      <Label htmlFor={id} className="text-muted-foreground mb-1.5">
-        Specialist
-      </Label>
-      <select
-        id={id}
-        name={id}
-        value={value}
-        onChange={(event) => {
-          onChange(event.target.value);
-        }}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={error ? errorId : undefined}
-        className="border-input focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
-      >
-        <option value="">Choose a specialist</option>
-        {specialists.map((specialist) => (
-          <option key={specialist.id} value={specialist.id}>
-            {specialist.name} — {specialist.specialty}
-          </option>
-        ))}
-      </select>
-      {/*
-        The message is what conveys the error — the red border is a redundant
-        cue, never the only one. Mirrors `FormField`, which this control cannot
-        reuse because that component renders an `<input>`.
-      */}
-      {error ? (
-        <p id={errorId} className="text-destructive mt-1 flex items-center gap-1 text-xs">
-          <CircleAlert className="size-3 shrink-0" />
-          {error}
-        </p>
-      ) : null}
-    </div>
-  );
+function specialistOptions(specialists: SpecialistWithUsage[]): SelectOption[] {
+  return specialists.map((specialist) => ({
+    value: specialist.id,
+    label: `${specialist.name} — ${specialist.specialty}`,
+  }));
 }
 
 export default function MedicationsManager({ initialMedications, specialists, loadFailed }: Props) {
@@ -429,15 +389,17 @@ export default function MedicationsManager({ initialMedications, specialists, lo
               placeholder="Metformin 500 mg"
               error={addErrors.name || undefined}
             />
-            <SpecialistSelect
+            <SelectField
               id="medication-specialist"
+              label="Specialist"
               value={addSpecialistId}
               onChange={(value) => {
                 setAddSpecialistId(value);
                 setAddErrors((previous) => ({ ...previous, specialist_id: "" }));
               }}
+              options={specialistOptions(specialists)}
+              placeholder="Choose a specialist"
               error={addErrors.specialist_id || undefined}
-              specialists={specialists}
             />
             <FormField
               id="medication-expiry"
@@ -682,15 +644,17 @@ export default function MedicationsManager({ initialMedications, specialists, lo
                           }}
                           error={panelErrors.name || undefined}
                         />
-                        <SpecialistSelect
+                        <SelectField
                           id={`edit-specialist-${medication.id}`}
+                          label="Specialist"
                           value={editSpecialistId}
                           onChange={(value) => {
                             setEditSpecialistId(value);
                             setPanelErrors((previous) => ({ ...previous, specialist_id: "" }));
                           }}
+                          options={specialistOptions(specialists)}
+                          placeholder="Choose a specialist"
                           error={panelErrors.specialist_id || undefined}
-                          specialists={specialists}
                         />
                         <FormField
                           id={`edit-expiry-${medication.id}`}

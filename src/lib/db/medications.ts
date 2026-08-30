@@ -1,4 +1,5 @@
 import type { Tables } from "@/db/database.types";
+import { resolveToday } from "@/lib/dates";
 import type { SupabaseClient } from "@/lib/supabase";
 import type { MedicationCreateInput, MedicationDetailsInput, SupplyInput } from "@/lib/validation/medication";
 
@@ -75,10 +76,15 @@ function logDbError(operation: string, error: { code: string; message: string })
  * This is column-scoped, not a blanket rule: a date resolved for user-facing
  * classification belongs in the user's own zone, and S-03 resolves one that way
  * for its Upcoming/Past split. The two "todays" may differ by a calendar day,
- * and that is intended. See `CLAUDE.md` -> _Domain schema_.
+ * and that is intended. See `CLAUDE.md` -> _Dates_.
+ *
+ * Both branches go through the one resolver in `src/lib/dates.ts`: passing the
+ * literal `"UTC"` here is what makes the zone an argument rather than a second
+ * implementation, so "resolve a date through `resolveToday`" is a rule about
+ * the code and not an aspiration.
  */
 function todayUtc(): string {
-  return new Date().toISOString().slice(0, 10);
+  return resolveToday("UTC");
 }
 
 /**
