@@ -407,14 +407,14 @@ Agreed with S-02 on 2026-08-28, before either slice writes code, because the two
 - [x] 2.6 Signed-out redirect works; topbar shows and marks **Visits** active — 9559c16
 - [x] 2.7 The grouped list is in the SSR HTML before hydration — 9559c16
 - [x] 2.8 Add, edit, and delete leave the list correctly grouped and sorted — 9559c16
-- [ ] 2.9 Past and far-future notes appear and do not block saving
-- [ ] 2.10 The duplicate confirm dialog gates the save correctly
-- [ ] 2.11 The zero-specialists prompt replaces the form and links out
-- [ ] 2.12 A visit dated today appears under Upcoming
-- [ ] 2.13 Usable at 320 px with no horizontal scrolling
-- [ ] 2.14 Keyboard reachable, focus visible, dialogs trap and restore focus
-- [ ] 2.15 AA contrast holds and no error is signalled by colour alone
-- [ ] 2.16 A date hint is announced, not just rendered, and still yields to a validation error
+- [x] 2.9 Past and far-future notes appear and do not block saving — 9559c16
+- [x] 2.10 The duplicate confirm dialog gates the save correctly — 9559c16
+- [x] 2.11 The zero-specialists prompt replaces the form and links out — 9559c16
+- [x] 2.12 A visit dated today appears under Upcoming — 9559c16
+- [x] 2.13 Usable at 320 px with no horizontal scrolling — 9559c16
+- [x] 2.14 Keyboard reachable, focus visible, dialogs trap and restore focus — 9559c16
+- [x] 2.15 AA contrast holds and no error is signalled by colour alone — 9559c16
+- [x] 2.16 A date hint is announced, not just rendered, and still yields to a validation error — 9559c16
 
 ### Close-out
 
