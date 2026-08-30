@@ -1,21 +1,9 @@
 import type { APIRoute } from "astro";
-import { z } from "zod";
 import { json, jsonError, noContent, readJsonBody, zodFieldErrors } from "@/lib/api/json";
+import { readId } from "@/lib/api/params";
 import { deleteSpecialist, updateSpecialist } from "@/lib/db/specialists";
 import { createClient } from "@/lib/supabase";
 import { specialistInputSchema } from "@/lib/validation/specialist";
-
-const idSchema = z.uuid();
-
-/**
- * A non-UUID segment would reach Postgres as `22P02 invalid input syntax` and
- * surface as a 500. It is the same outcome as a UUID that matches nothing —
- * there is no such specialist — so it is answered the same way.
- */
-function readId(params: Record<string, string | undefined>): string | null {
-  const parsed = idSchema.safeParse(params.id);
-  return parsed.success ? parsed.data : null;
-}
 
 export const PATCH: APIRoute = async (context) => {
   if (!context.locals.user) {

@@ -1,0 +1,86 @@
+---
+import MedicationsManager from "@/components/medications/MedicationsManager";
+import Topbar from "@/components/Topbar.astro";
+import Layout from "@/layouts/Layout.astro";
+import { listMedications, type MedicationView } from "@/lib/db/medications";
+import { listSpecialists, type SpecialistWithUsage } from "@/lib/db/specialists";
+import { createClient } from "@/lib/supabase";
+
+// Fetched server-side so the list is in the first HTML response — no loading
+// flash and no round trip before first paint, which is the strongest answer to
+// the sub-1s mobile NFR.
+const supabase = createClient(Astro.request.headers, Astro.cookies);
+
+let medications: MedicationView[] = [];
+let specialists: SpecialistWithUsage[] = [];
+let loadFailed = false;
+
+if (supabase) {
+  const [medicationResult, specialistResult] = await Promise.all([
+    listMedications(supabase),
+    listSpecialists(supabase),
+  ]);
+
+  if (medicationResult.ok) {
+    medications = medicationResult.data;
+  } else {
+    loadFailed = true;
+  }
+
+  // The specialist list feeds the assignment `<select>`, so a failure here is
+  // just as blocking as a failed medication read: the add form would offer no
+  // choices and every submit would fail validation.
+  if (specialistResult.ok) {
+    specialists = specialistResult.data;
+  } else {
+    loadFailed = true;
+  }
+}
+
+// `medications.specialist_id` is `not null`, so with no specialists on file the
+// add form cannot be completed at all. Explain that and point at the fix rather
+// than rendering a form whose first field has nothing in it.
+const needsSpecialist = !loadFailed && specialists.length === 0;
+---
+
+<Layout title="Medications">
+  <Topbar />
+  <main class="px-4 py-8 sm:px-6">
+    <div class="mx-auto w-full max-w-3xl">
+      <h1 class="text-foreground text-2xl font-bold">Medications</h1>
+      <p class="text-muted-foreground mt-1 text-sm">
+        What you take, how much of it you have, and how much you take a day. Dosage changes and refills are recorded as
+        history, so the supply calculation can look back as well as forward.
+      </p>
+
+      {
+        loadFailed && (
+          <p class="border-destructive/40 text-destructive mt-6 rounded-md border px-4 py-3 text-sm">
+            Your medications could not be loaded. Reload the page to try again.
+          </p>
+        )
+      }
+
+      {
+        needsSpecialist && (
+          <p class="border-border text-muted-foreground mt-6 rounded-md border px-4 py-3 text-sm">
+            Every medication is assigned to a specialist, so add one first.{" "}
+            <a href="/specialists" class="text-primary rounded-sm font-medium hover:underline">
+              Add a specialist
+            </a>
+            .
+          </p>
+        )
+      }
+
+      <div class="border-border bg-card mt-6 rounded-xl border p-4 shadow-sm sm:p-6">
+        <MedicationsManager
+          initialMedications={medications}
+          specialists={specialists}
+          loadFailed={loadFailed}
+          client:load
+        />
+      </div>
+    </div>
+  </main>
+</Layout>

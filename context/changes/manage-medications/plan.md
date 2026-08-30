@@ -31,7 +31,7 @@ The screen is the second consumer of the F-01 schema and the direct prerequisite
 - **`.upsert()` is unavailable on `dosage_changes`.** PostgREST's upsert compiles to `INSERT … ON CONFLICT DO UPDATE`, and there is no UPDATE policy on that table, so the conflict branch is refused by RLS. This is the single most likely wrong turn in the whole slice.
 - **A starting quantity of `0` cannot be a `refill`** — `supply_events_refill_is_positive` requires `quantity_delta > 0`.
 - **`current_date` in the DELETE policy is UTC**, and the Worker's clock is UTC, so any date the application writes must be computed in UTC to agree with it.
-- **`append_only.test.sql` seeds only `current_date - 10` and `current_date + 10`** (`:29-31`), so nothing today asserts behaviour *at* `effective_date = current_date`. Phase 1's relaxation therefore breaks no existing assertion — and gains none either.
+- **`append_only.test.sql` seeds only `current_date - 10` and `current_date + 10`** (`:29-31`), so nothing today asserts behaviour _at_ `effective_date = current_date`. Phase 1's relaxation therefore breaks no existing assertion — and gains none either.
 
 ## Desired End State
 
@@ -53,16 +53,16 @@ Signed-out visitors are redirected to `/auth/signin`. The screen works at 320 px
 - `daily_dosage = 0` means "stopped, keep the history" and is explicitly distinct from archival (`20260813185255_domain_schema.sql:126-129`).
 - PostgREST resolves composite-FK embeds without a disambiguating hint — proven in `src/lib/db/specialists.ts:44-46` against `(specialist_id, user_id)`.
 - `medications_user_id_active_idx` is **partial** on `archived_at is null`, so a query that fetches archived rows too will not use it. Irrelevant at MVP volume; named so nobody "fixes" the index later without knowing why.
-- No pgTAP test asserts a policy *name*, so Phase 1 may rename the DELETE policy safely.
+- No pgTAP test asserts a policy _name_, so Phase 1 may rename the DELETE policy safely.
 
 ## What We're NOT Doing
 
 - **The supply-end calculation, colour status, and the dashboard.** S-04. Nothing here computes a projection or a traffic light. The expiry badge described in Phase 4 is a bare date comparison and deliberately uses neutral/destructive tokens, **not** the green/yellow/red scale S-04 will define.
 - **Future-dated dosage changes.** S-05. `effective_date` is always today in this slice; the UI offers no date picker for it. The schema and the relaxed policy both already permit future rows, so S-05 adds a control rather than a mechanism.
-- **Liquid medications.** S-06. `form` is always written as `'solid'` and the zod schema *rejects* a liquid payload rather than merely omitting the fields from the form — so an API caller cannot create a half-built liquid row this slice cannot display.
+- **Liquid medications.** S-06. `form` is always written as `'solid'` and the zod schema _rejects_ a liquid payload rather than merely omitting the fields from the form — so an API caller cannot create a half-built liquid row this slice cannot display.
 - **`recount` supply events.** An honest recount needs `projected_quantity` from S-04's consumption engine. Corrections here are `adjustment` rows.
 - **Current-state SQL views.** Deferred to S-04 per `CLAUDE.md` → _Domain schema_; this slice aggregates in TypeScript and Phase 2 names the replacement point.
-- **Any new automated test.** Explicit decision, 2026-08-27. See `follow-ups/deferred-tests.md`. The existing suites are still *run* as regression checks; none are *added*.
+- **Any new automated test.** Explicit decision, 2026-08-27. See `follow-ups/deferred-tests.md`. The existing suites are still _run_ as regression checks; none are _added_.
 - **S-01's open follow-ups** (`specialists-tests`, `signed-in-landing`) and F-01's (F2 numeric scale, F3 GDPR erasure, F9 CI gating, D-01 mirrored grants).
 - **Search, sort, filter, pagination, or a medication detail page.** The list is flat and ordered by name.
 - **Pushing the migration to cloud.** Local only; queued as a follow-up.
@@ -79,7 +79,7 @@ The data module owns all multi-statement sequencing. A route never issues two wr
 
 **`.upsert()` cannot be used on `dosage_changes`.** PostgREST compiles upsert to `INSERT … ON CONFLICT DO UPDATE`; the table has no UPDATE policy, so the conflict branch is refused by RLS and the call fails rather than replacing the row. Setting today's dosage is therefore an explicit DELETE-then-INSERT, in that order: the DELETE is a no-op affecting zero rows when no row exists today, so one code path serves both first-set and same-day correction. Attempt order matters — INSERT-first-then-recover-from-23505 costs an extra round trip on the correction path and leaves the same non-atomic window.
 
-**That window destroys data, so the DELETE must be reversible.** If the INSERT fails after the DELETE has landed, the user's *previous* dosage is gone — and because `listMedications` reads "no row ⇒ 0" and the status precedence maps `current_dosage === 0` to `not_used`, the loss renders as the deliberate "I have stopped taking this" state. The route returns 500, but a reload shows a plausible row and nothing tells the user a value was deleted. The DELETE therefore chains `.select("daily_dosage")` to capture what it removed (the DELETE-with-RETURNING pattern is already proven at `src/lib/db/specialists.ts:136-147`), and on INSERT failure the module re-inserts the captured value before returning the error, so a 500 honestly means "nothing changed". The compensating INSERT can itself fail; that case logs under its own operation name so the Workers log can distinguish it from an ordinary failure. This is the one place in the slice where a partial result is *not* a legitimate domain state.
+**That window destroys data, so the DELETE must be reversible.** If the INSERT fails after the DELETE has landed, the user's _previous_ dosage is gone — and because `listMedications` reads "no row ⇒ 0" and the status precedence maps `current_dosage === 0` to `not_used`, the loss renders as the deliberate "I have stopped taking this" state. The route returns 500, but a reload shows a plausible row and nothing tells the user a value was deleted. The DELETE therefore chains `.select("daily_dosage")` to capture what it removed (the DELETE-with-RETURNING pattern is already proven at `src/lib/db/specialists.ts:136-147`), and on INSERT failure the module re-inserts the captured value before returning the error, so a 500 honestly means "nothing changed". The compensating INSERT can itself fail; that case logs under its own operation name so the Workers log can distinguish it from an ordinary failure. This is the one place in the slice where a partial result is _not_ a legitimate domain state.
 
 **Dates are computed in UTC, on the server, never in the browser.** `dosage_changes_delete_future_own` compares `effective_date` against Postgres `current_date`, which is UTC on Supabase. A date derived from the visitor's local clock disagrees with it for part of every day, and the symptom — "I can't correct the dosage I just set" — would appear only near midnight and only for some users. The data module derives `today` itself; no route or island sends a date for `effective_date` or `occurred_on`.
 
@@ -163,14 +163,14 @@ The whole domain lives here. Four zod schemas and one data module; no route or c
 - `recordSupply(client, id, input)` → `Result<MedicationView>`. A `refill` inserts `{ event_type: "refill", quantity_delta: amount }`. A `correction` reads the current ledger sum, computes `counted − sum`, returns the unchanged row without writing when that delta is `0`, and otherwise inserts `{ event_type: "adjustment", quantity_delta: delta }`. `counted_quantity` and `projected_quantity` stay null — the CASE CHECK requires that for a non-recount.
 - `setArchived(client, id, archived)` → `Result<MedicationView>`. Sets `archived_at` to now or null, plus `updated_at`. Chained `.select()`.
 
-**Ownership of the "legal states" rule.** The developer's framing, verbatim from planning: *"When user stops use a medication it should be visible on the list of medications … so dosage equal to 0 is proper state, quantity equal to 0 — user used all the medicine and doesn't have new part — is also possible."* The module therefore never reports these as errors and never flags a row as incomplete. `status` is derived, in this precedence order:
+**Ownership of the "legal states" rule.** The developer's framing, verbatim from planning: _"When user stops use a medication it should be visible on the list of medications … so dosage equal to 0 is proper state, quantity equal to 0 — user used all the medicine and doesn't have new part — is also possible."_ The module therefore never reports these as errors and never flags a row as incomplete. `status` is derived, in this precedence order:
 
 1. `archived_at` is set → `archived`
 2. `current_dosage === 0` → `not_used` (intent is the more informative fact than emptiness)
 3. `quantity_on_hand <= 0` → `out_of_stock`
 4. otherwise → `active`
 
-Expiry is reported separately as a boolean, not folded into `status`, because a medication can be expired *and* in any of the four states.
+Expiry is reported separately as a boolean, not folded into `status`, because a medication can be expired _and_ in any of the four states.
 
 ### Success Criteria
 
@@ -284,7 +284,7 @@ The visible slice. SSR the list and the specialist options in frontmatter, hand 
 
 **Contract**: props `{ initialMedications: MedicationView[]; specialists: SpecialistWithUsage[] }`. Sections: an add form (name, specialist `<select>`, expiry date, starting daily dosage, starting quantity), the notice region, a "Show archived" toggle, and the list.
 
-Each row shows name, specialist name, expiry date, current dosage, quantity on hand, and a status badge. Row controls: **Edit details** (inline form, as S-01 does), **Change dosage** (a number input plus an explicit *Stop taking this* affordance that submits `0`), **Add refill**, **Correct amount**, and **Archive** / **Restore**. Archive is confirmed through `AlertDialog`; restore is not, because it is not destructive.
+Each row shows name, specialist name, expiry date, current dosage, quantity on hand, and a status badge. Row controls: **Edit details** (inline form, as S-01 does), **Change dosage** (a number input plus an explicit _Stop taking this_ affordance that submits `0`), **Add refill**, **Correct amount**, and **Archive** / **Restore**. Archive is confirmed through `AlertDialog`; restore is not, because it is not destructive.
 
 Badge tokens — green is rationed per `CLAUDE.md` → _Design conventions_, and there is no amber token in `:root`:
 
@@ -296,7 +296,7 @@ Badge tokens — green is rationed per `CLAUDE.md` → _Design conventions_, and
 | `archived`     | `text-muted-foreground`             |
 | expired (flag) | `text-destructive`, rendered beside |
 
-Every badge carries a word, never colour alone. The status label must read as a fact, not a warning: *Not used* and *Out of stock* are states the user chose or arrived at, and the copy says so.
+Every badge carries a word, never colour alone. The status label must read as a fact, not a warning: _Not used_ and _Out of stock_ are states the user chose or arrived at, and the copy says so.
 
 #### 3. Route protection and navigation
 
@@ -330,7 +330,7 @@ Write it as that column-scoped rule, **not** as "all application dates are UTC".
 - With zero specialists, the page explains why and links to `/specialists`; the add form is absent
 - Add a medication with dosage 1 and quantity 30 → row shows dosage 1, quantity 30, **Active**
 - Change its dosage to 2, then immediately to 3 → both succeed and the row shows 3 (Phase 1's payoff, and the specific thing that was impossible before)
-- *Stop taking this* → dosage 0, badge reads **Not used**, the row stays visible
+- _Stop taking this_ → dosage 0, badge reads **Not used**, the row stays visible
 - Add a medication with quantity 0 → badge reads **Out of stock**, no error
 - Refill +20 then correct to 5 → quantity reads 5; correcting to 5 again is a silent no-op
 - Set an expiry date in the past → the expired flag renders alongside the status badge
@@ -375,16 +375,16 @@ One migration, local only. It is a policy relaxation, so it is safe to apply to 
 
 ## Parallel-slice coordination
 
-S-03 (`manage-doctor-visits`) is planned in a sibling worktree and edits **five of the same files**. A trial merge of the two branches already conflicts *today*, before either has written a line of code — both flipped their own roadmap row from `proposed` to `planning` on adjacent lines of the same table.
+S-03 (`manage-doctor-visits`) is planned in a sibling worktree and edits **five of the same files**. A trial merge of the two branches already conflicts _today_, before either has written a line of code — both flipped their own roadmap row from `proposed` to `planning` on adjacent lines of the same table.
 
-| File | S-02 (`manage-medications`) writes | S-03 (`manage-doctor-visits`) writes |
-| ---- | ---------------------------------- | ------------------------------------ |
-| `context/foundation/roadmap.md` | its own row + status block -> `planning` | its own row + status block -> `planning` |
-| `src/middleware.ts:4` | appends `"/medications"` to `PROTECTED_ROUTES` | appends `"/visits"` |
-| `src/components/Topbar.astro:4-7` | inserts a `Medications` nav entry | inserts a `Visits` nav entry |
-| `src/components/form/FormField.tsx` | consumes it unchanged | adds a `${id}-hint` id and widens `aria-describedby` |
-| `CLAUDE.md` | two rules at the tail of `## Domain schema` | a dates rule and a `src/components/form/` rule |
-| date resolution | derives UTC `today` inside the data module | creates `resolveToday(timeZone)` in `src/lib/dates.ts` |
+| File                                | S-02 (`manage-medications`) writes             | S-03 (`manage-doctor-visits`) writes                   |
+| ----------------------------------- | ---------------------------------------------- | ------------------------------------------------------ |
+| `context/foundation/roadmap.md`     | its own row + status block -> `planning`       | its own row + status block -> `planning`               |
+| `src/middleware.ts:4`               | appends `"/medications"` to `PROTECTED_ROUTES` | appends `"/visits"`                                    |
+| `src/components/Topbar.astro:4-7`   | inserts a `Medications` nav entry              | inserts a `Visits` nav entry                           |
+| `src/components/form/FormField.tsx` | consumes it unchanged                          | adds a `${id}-hint` id and widens `aria-describedby`   |
+| `CLAUDE.md`                         | two rules at the tail of `## Domain schema`    | a dates rule and a `src/components/form/` rule         |
+| date resolution                     | derives UTC `today` inside the data module     | creates `resolveToday(timeZone)` in `src/lib/dates.ts` |
 
 `src/middleware.ts:4` is the certain one: a single-line array literal that both branches rewrite, so the conflict is unavoidable and the resolution unambiguous. `Topbar.astro` takes two entries at the same insertion point. None of this is hard to resolve; the risk is resolving it blind and silently dropping one slice's route guard or nav entry.
 
@@ -394,7 +394,7 @@ S-03 (`manage-doctor-visits`) is planned in a sibling worktree and edits **five 
 
 Agreed with S-03 on 2026-08-28, before either slice writes code, because the two plans reached opposite defaults independently and each was right about its own column.
 
-- A date column an **RLS policy compares against Postgres `current_date`** is resolved in **UTC**. Today that is `dosage_changes.effective_date`, and `supply_events.occurred_on` by symmetry. `current_date` on Supabase is UTC, so a zone behind it — UTC-8 at 22:00 local writes *yesterday* — would produce a row failing `effective_date >= current_date`, leaving the dosage just set uncorrectable. That is the precise bug Phase 1's migration exists to remove, so a user-local date here would reintroduce it for every western zone.
+- A date column an **RLS policy compares against Postgres `current_date`** is resolved in **UTC**. Today that is `dosage_changes.effective_date`, and `supply_events.occurred_on` by symmetry. `current_date` on Supabase is UTC, so a zone behind it — UTC-8 at 22:00 local writes _yesterday_ — would produce a row failing `effective_date >= current_date`, leaving the dosage just set uncorrectable. That is the precise bug Phase 1's migration exists to remove, so a user-local date here would reintroduce it for every western zone.
 - A date resolved for **user-facing classification** — S-03's Upcoming/Past split — is resolved in the **user's stored zone**.
 - **The two "todays" may differ by one calendar day, and that is intended.** S-04 must not assume the dashboard's "today" and a medication's `effective_date` were resolved the same way; S-05's segment boundaries sit directly on this seam.
 
@@ -428,70 +428,70 @@ Agreed with S-03 on 2026-08-28, before either slice writes code, because the two
 
 #### Automated
 
-- [ ] 1.1 `npm run db:reset` applies all migrations with no error
-- [ ] 1.2 `npm run db:test` still reports 70 passing assertions
-- [ ] 1.3 `npm test` still reports 15 passing tests
-- [ ] 1.4 `npm run lint` passes at 0 errors, 0 warnings
+- [x] 1.1 `npm run db:reset` applies all migrations with no error — 3455061
+- [x] 1.2 `npm run db:test` still reports 70 passing assertions — 3455061
+- [x] 1.3 `npm test` still reports 15 passing tests — 3455061
+- [x] 1.4 `npm run lint` passes at 0 errors, 0 warnings — 3455061
 
 #### Manual
 
-- [ ] 1.5 A `dosage_changes` row at `effective_date = current_date` deletes; one at `current_date - 1` does not
-- [ ] 1.6 The renamed policy exists in `pg_policy` and the old name does not
+- [x] 1.5 A `dosage_changes` row at `effective_date = current_date` deletes; one at `current_date - 1` does not — 3455061
+- [x] 1.6 The renamed policy exists in `pg_policy` and the old name does not — 3455061
 - [x] 1.7 `follow-ups/deferred-tests.md` written with the specification for the future test slice — landed with the plan commit, before implementation starts
 
 ### Phase 2: Validation schema and data module
 
 #### Automated
 
-- [ ] 2.1 `npm run lint` passes at 0 errors, 0 warnings
-- [ ] 2.2 `npm run build` succeeds
-- [ ] 2.3 Exactly one `console.` call in `src/lib/db/medications.ts`
-- [ ] 2.4 No `.eq("user_id"` in `src/lib/db/medications.ts`
+- [x] 2.1 `npm run lint` passes at 0 errors, 0 warnings — 3a34bdd
+- [x] 2.2 `npm run build` succeeds — 3a34bdd
+- [x] 2.3 Exactly one `console.` call in `src/lib/db/medications.ts` — 3a34bdd
+- [x] 2.4 No `.eq("user_id"` in `src/lib/db/medications.ts` — 3a34bdd
 
 #### Manual
 
-- [ ] 2.5 Module conventions match `src/lib/db/specialists.ts`
-- [ ] 2.6 No `.upsert(` anywhere in the file
-- [ ] 2.7 `setDosage` captures the deleted dosage and re-inserts it if the replacement INSERT fails
-- [ ] 2.8 `listMedications` runs against the local stack: three embeds resolve and the fold returns the expected dosage and quantity
+- [x] 2.5 Module conventions match `src/lib/db/specialists.ts` — 3a34bdd
+- [x] 2.6 No `.upsert(` anywhere in the file — 3a34bdd
+- [x] 2.7 `setDosage` captures the deleted dosage and re-inserts it if the replacement INSERT fails — 3a34bdd
+- [x] 2.8 `listMedications` runs against the local stack: three embeds resolve and the fold returns the expected dosage and quantity — 3a34bdd
 
 ### Phase 3: API routes
 
 #### Automated
 
-- [ ] 3.1 `npm run lint` passes at 0 errors, 0 warnings
-- [ ] 3.2 `npm run build` succeeds
-- [ ] 3.3 Every handler guards `context.locals.user` and a null client
-- [ ] 3.4 No request body is spread in any route
+- [x] 3.1 `npm run lint` passes at 0 errors, 0 warnings — 361baa9
+- [x] 3.2 `npm run build` succeeds — 361baa9
+- [x] 3.3 Every handler guards `context.locals.user` and a null client — 361baa9
+- [x] 3.4 No request body is spread in any route — 361baa9
 
 #### Manual
 
-- [ ] 3.5 Create, patch, dosage-twice-in-a-minute, refill, correct, archive, restore all answer as specified
-- [ ] 3.6 A `PATCH` naming another user's `specialist_id` answers 400 with `fieldErrors.specialist_id`
-- [ ] 3.7 A malformed body answers 400 in the contract's shape
-- [ ] 3.8 A create carrying `form: "liquid"` is rejected
+- [x] 3.5 Create, patch, dosage-twice-in-a-minute, refill, correct, archive, restore all answer as specified — 361baa9
+- [x] 3.6 A `PATCH` naming another user's `specialist_id` answers 400 with `fieldErrors.specialist_id` — 361baa9
+- [x] 3.7 A malformed body answers 400 in the contract's shape — 361baa9
+- [x] 3.8 A create carrying `form: "liquid"` is rejected — 361baa9
 
 ### Phase 4: Page, island, and navigation
 
 #### Automated
 
-- [ ] 4.1 `npm run lint` passes at 0 errors, 0 warnings
-- [ ] 4.2 `npm run build` succeeds with the dev server stopped
-- [ ] 4.3 `npm run db:test` and `npm test` still green
+- [x] 4.1 `npm run lint` passes at 0 errors, 0 warnings — 0b33a31
+- [x] 4.2 `npm run build` succeeds with the dev server stopped — 0b33a31
+- [x] 4.3 `npm run db:test` and `npm test` still green — 0b33a31
 
 #### Manual
 
-- [ ] 4.4 Signed out redirects to `/auth/signin`; signed in renders
-- [ ] 4.5 Zero specialists shows the explanation and link, and no add form
-- [ ] 4.6 Add with dosage 1 / quantity 30 shows Active
-- [ ] 4.7 Two dosage changes in one minute both succeed
-- [ ] 4.8 Stop taking this → dosage 0, badge Not used, row still visible
-- [ ] 4.9 Add with quantity 0 → badge Out of stock, no error
-- [ ] 4.10 Refill +20 then correct to 5 → quantity 5; repeating the correction is a no-op
-- [ ] 4.11 A past expiry date renders the expired flag
-- [ ] 4.12 Archive, Show archived, and Restore all behave as specified
-- [ ] 4.13 Reassigning the specialist updates the row
-- [ ] 4.14 Topbar shows Medications and marks it active
-- [ ] 4.15 No horizontal scrolling at 320 px, including expanded forms
-- [ ] 4.16 Keyboard-only navigation reaches every control; the archive dialog traps and restores focus
-- [ ] 4.17 `CLAUDE.md` records the upsert rule and the column-scoped date rule agreed with S-03, phrased so it does not contradict S-03's user-zone resolution
+- [x] 4.4 Signed out redirects to `/auth/signin`; signed in renders — 0b33a31
+- [x] 4.5 Zero specialists shows the explanation and link, and no add form — 0b33a31
+- [x] 4.6 Add with dosage 1 / quantity 30 shows Active — 0b33a31
+- [x] 4.7 Two dosage changes in one minute both succeed — 0b33a31
+- [x] 4.8 Stop taking this → dosage 0, badge Not used, row still visible — 0b33a31
+- [x] 4.9 Add with quantity 0 → badge Out of stock, no error — 0b33a31
+- [x] 4.10 Refill +20 then correct to 5 → quantity 5; repeating the correction is a no-op — 0b33a31
+- [x] 4.11 A past expiry date renders the expired flag — 0b33a31
+- [x] 4.12 Archive, Show archived, and Restore all behave as specified — 0b33a31
+- [x] 4.13 Reassigning the specialist updates the row — 0b33a31
+- [x] 4.14 Topbar shows Medications and marks it active — 0b33a31
+- [x] 4.15 No horizontal scrolling at 320 px, including expanded forms — 0b33a31
+- [x] 4.16 Keyboard-only navigation reaches every control; the archive dialog traps and restores focus — 0b33a31
+- [x] 4.17 `CLAUDE.md` records the upsert rule and the column-scoped date rule agreed with S-03, phrased so it does not contradict S-03's user-zone resolution — 0b33a31
