@@ -3,7 +3,7 @@ change_id: manage-doctor-visits
 title: Manage doctor visits — add, list, edit, and delete a visit (date + specialist)
 status: implementing
 created: 2026-08-27
-updated: 2026-08-29
+updated: 2026-08-30
 archived_at: null
 ---
 
@@ -92,3 +92,48 @@ Next session: finish 2.9–2.16 against `http://localhost:4322/visits`, then
 close-out. The delivery merge to `master` stays blocked until S-02 merges first
 (_Merge order_); S-02 is at `3a34bdd` with its Phase 3 manual checks and all of
 Phase 4 still open.
+
+### Session state — 2026-08-30
+
+**Phase 2 is closed.** Manual checks 2.9–2.16 — the date hints, the duplicate
+confirm dialog, the zero-specialists prompt, the today-is-upcoming case, 320 px,
+keyboard and focus, AA contrast, and the hint's aria wiring — were all confirmed
+in the browser against `9559c16` and ticked in `aacc338`. Close-out 3.1–3.4
+follows in the epilogue commit. No code changed this session; every edit is under
+`context/` or in `CLAUDE.md`.
+
+A third thing the plan did not predict, and the one that cost the most time:
+
+- **A dead local Supabase stack surfaces as an opaque `internal error;
+  reference = <id>` on sign-in, with no mention of Supabase, connections, or
+  ports.** Docker Desktop was not running, so `signInWithPassword` fetched a dead
+  `127.0.0.1:54321`; under `@astrojs/cloudflare` the dev server runs in workerd,
+  which swallowed the connection failure and re-emitted it with a fresh reference
+  id per attempt. The id matches nothing in the codebase — `grep -rn "reference"
+  src/` finds no such string — and the accompanying `remote: true` is a
+  distraction, since the adapter auto-enables `IMAGES` and `SESSION` KV as remote
+  bindings that no application code touches. **Check `docker info` before reading
+  this error as an application fault.** Recovery was launching Docker Desktop and
+  waiting; the containers restarted themselves and the `supabase_db_medcalc`
+  volume survived, so no migrations were re-applied and no `db:reset` claim was
+  taken on the stack shared with S-02. The signal that it was fixed: a bad-password
+  POST to `/api/auth/signin` answering `302 → /auth/signin?error=Invalid%20login%20credentials`
+  instead of the internal error. `supabase_vector_medcalc` stayed in a restart
+  loop afterwards — that is the log-shipping container only, and auth, REST and
+  the database were all healthy without it.
+
+Also correcting last session's note: **4321 is not reliably S-02's.** It was free
+today because that worktree's dev server was not running, so this slice's server
+took the default. Read the port off `astro dev`'s own banner rather than assuming
+either number.
+
+Nothing else diverged from the plan. `src/db/database.types.ts` and
+`supabase/migrations/` are untouched, as the plan requires.
+
+**The delivery merge to `master` stays blocked until S-02 merges first**
+(_Merge order_), and this slice still carries the three reconciliation tasks
+listed there — re-applying its own `middleware.ts` and `Topbar.astro` one-liners
+by hand, swapping S-02's inline UTC `today` for `resolveToday("UTC")`, and
+migrating S-02's specialist `<select>` onto `SelectField`. Until task 2 lands,
+`CLAUDE.md` → _Dates_ deliberately stops short of claiming `resolveToday` is the
+only place a timezone is interpreted; that sentence would be false on arrival.
