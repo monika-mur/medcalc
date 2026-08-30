@@ -49,7 +49,11 @@ function logDbError(operation: string, error: { code: string; message: string })
  * exact rather than a heuristic, and no join is needed to render a row.
  */
 export async function listVisits(client: SupabaseClient): Promise<Result<Visit[]>> {
-  const { data, error } = await client.from("visits").select("*").order("visit_date");
+  // `created_at` is the tiebreak, not decoration: duplicates are legal here (no
+  // unique constraint by decision), and ordering by `visit_date` alone leaves a
+  // same-date pair in whatever order Postgres happened to return, so the two
+  // rows would swap places across a refresh.
+  const { data, error } = await client.from("visits").select("*").order("visit_date").order("created_at");
 
   if (error) {
     logDbError("list", error);

@@ -18,6 +18,12 @@ interface SelectFieldProps {
   /** Rendered as a disabled, empty-valued first option. */
   placeholder?: string;
   error?: string;
+  /**
+   * No caller passes this yet. It is here because the point of this component
+   * is to mirror `FormField`'s contract exactly — a form mixing the two must
+   * not offer a hint on one control and not the other. Do not remove it as
+   * dead code.
+   */
   hint?: ReactNode;
 }
 
@@ -58,9 +64,13 @@ export function SelectField({ id, name, label, value, onChange, options, placeho
           aria-invalid={error ? true : undefined}
           aria-describedby={describedBy}
           className={cn(
-            "border-input placeholder:text-muted-foreground h-9 w-full min-w-0 appearance-none rounded-md border bg-transparent py-1 pr-9 pl-3 text-base shadow-xs transition-[color,box-shadow] outline-none disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
+            // Token-for-token with `src/components/ui/input.tsx`, the `dark:`
+            // variants included. That block in `global.css` is dead today, but
+            // a select that only matches `Input` in light mode is exactly the
+            // drift this component exists to prevent.
+            "border-input placeholder:text-muted-foreground dark:bg-input/30 h-9 w-full min-w-0 appearance-none rounded-md border bg-transparent py-1 pr-9 pl-3 text-base shadow-xs transition-[color,box-shadow] outline-none disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
             "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
-            "aria-invalid:border-destructive aria-invalid:ring-destructive/20",
+            "aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40",
           )}
         >
           {placeholder ? (

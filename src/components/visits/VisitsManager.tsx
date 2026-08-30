@@ -77,6 +77,14 @@ function dateHint(value: string, today: string): ReactNode {
   if (!value) {
     return null;
   }
+  // Classify only a value the schema would accept. `isPast` and `isFarFuture`
+  // are plain string comparisons, so an out-of-range value the field can still
+  // emit — `<input type="date">` allows a 5-digit year — sorts below `today`
+  // and would draw "already passed" for a date thousands of years out. The
+  // schema blocks the save either way; this keeps the advisory text honest.
+  if (!visitInputSchema.shape.visit_date.safeParse(value).success) {
+    return null;
+  }
   if (isPast(value, today)) {
     return <p className="text-muted-foreground mt-1 text-xs">This date has already passed. You can still save it.</p>;
   }
@@ -107,12 +115,16 @@ export default function VisitsManager({ initialVisits, specialists, today }: Pro
     value: specialist.id,
     label: `${specialist.name} — ${specialist.specialty}`,
   }));
+  // Each group tiebreaks on `created_at` in its own direction, so Past reads as
+  // the exact reverse of Upcoming and a same-date pair holds its place across a
+  // refresh. Without the tiebreak the comparator returns 0 and the order falls
+  // through to whatever `listVisits` happened to return.
   const upcoming = visits
     .filter((visit) => !isPast(visit.visit_date, today))
-    .sort((a, b) => a.visit_date.localeCompare(b.visit_date));
+    .sort((a, b) => a.visit_date.localeCompare(b.visit_date) || a.created_at.localeCompare(b.created_at));
   const past = visits
     .filter((visit) => isPast(visit.visit_date, today))
-    .sort((a, b) => b.visit_date.localeCompare(a.visit_date));
+    .sort((a, b) => b.visit_date.localeCompare(a.visit_date) || b.created_at.localeCompare(a.created_at));
 
   function setErrorsFor(target: SaveTarget, errors: FieldErrors) {
     if (target.kind === "add") {
@@ -120,6 +132,24 @@ export default function VisitsManager({ initialVisits, specialists, today }: Pro
     } else {
       setEditErrors(errors);
     }
+  }
+
+  /**
+   * A client-side rejection renders its messages under the fields but does not
+   * write to the notice region, so nothing announces it — the submit simply
+   * appears to do nothing to a screen reader. Moving focus to the first invalid
+   * control is what makes the rejection perceivable: the field's own
+   * `aria-describedby` error text is read on arrival. Fields are checked in
+   * render order so focus lands on the topmost problem.
+   */
+  function focusFirstError(target: SaveTarget, errors: FieldErrors) {
+    const suffix = target.kind === "add" ? "" : `-${target.id}`;
+    const prefix = target.kind === "add" ? "visit" : "edit";
+    const firstInvalid = (["specialist_id", "visit_date"] as const).find((field) => errors[field]);
+    if (!firstInvalid) return;
+
+    const segment = firstInvalid === "specialist_id" ? "specialist" : "date";
+    document.getElementById(`${prefix}-${segment}${suffix}`)?.focus();
   }
 
   function specialistLabel(id: string) {
@@ -187,7 +217,9 @@ export default function VisitsManager({ initialVisits, specialists, today }: Pro
         : { specialist_id: editSpecialistId, visit_date: editDate },
     );
     if (!parsed.success) {
-      setErrorsFor(target, zodFieldErrors(parsed.error));
+      const errors = zodFieldErrors(parsed.error);
+      setErrorsFor(target, errors);
+      focusFirstError(target, errors);
       return;
     }
     setErrorsFor(target, {});
