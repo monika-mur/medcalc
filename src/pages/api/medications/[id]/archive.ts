@@ -1,9 +1,9 @@
 import type { APIRoute } from "astro";
 import { z } from "zod";
 import { json, jsonError, readJsonBody } from "@/lib/api/json";
+import { readId } from "@/lib/api/params";
 import { setArchived } from "@/lib/db/medications";
 import { createClient } from "@/lib/supabase";
-import { readId } from "../_shared";
 
 /**
  * Archive (FR-007) and its undo. A separate route rather than a boolean inside

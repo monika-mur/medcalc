@@ -1,9 +1,9 @@
 import type { APIRoute } from "astro";
 import { json, jsonError, readJsonBody, zodFieldErrors } from "@/lib/api/json";
+import { readId } from "@/lib/api/params";
 import { recordSupply } from "@/lib/db/medications";
 import { createClient } from "@/lib/supabase";
 import { supplyInputSchema } from "@/lib/validation/medication";
-import { readId } from "../_shared";
 
 /**
  * Records a refill or a count correction. Its own route because it writes

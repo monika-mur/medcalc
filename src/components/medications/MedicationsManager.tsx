@@ -31,6 +31,13 @@ interface Props {
   initialMedications: MedicationView[];
   /** `specialist_id` is `not null`, so an empty list means no medication can be added. */
   specialists: SpecialistWithUsage[];
+  /**
+   * Either server-side read failed, so `initialMedications` is empty because
+   * nothing could be fetched — not because the user has nothing. The two look
+   * identical from in here, and telling them apart is what keeps the island
+   * from inviting a duplicate of a medication it simply could not see.
+   */
+  loadFailed: boolean;
 }
 
 type FieldErrors = Record<string, string>;
@@ -156,7 +163,7 @@ function SpecialistSelect({ id, value, onChange, error, specialists }: Specialis
   );
 }
 
-export default function MedicationsManager({ initialMedications, specialists }: Props) {
+export default function MedicationsManager({ initialMedications, specialists, loadFailed }: Props) {
   const [medications, setMedications] = useState(initialMedications);
   const [showArchived, setShowArchived] = useState(false);
   const [pending, setPending] = useState(false);
@@ -178,7 +185,11 @@ export default function MedicationsManager({ initialMedications, specialists }: 
   const [refillValue, setRefillValue] = useState("");
   const [countedValue, setCountedValue] = useState("");
 
-  const canAdd = specialists.length > 0;
+  // Adding is offered only when the page knows what is already there. After a
+  // failed read the list is empty because nothing loaded, so an add form here
+  // would invite a second copy of a medication the user already tracks — and
+  // `medications` has no DELETE policy, so the only cleanup is archival.
+  const canAdd = specialists.length > 0 && !loadFailed;
   const archivedCount = medications.filter((row) => row.archived_at !== null).length;
   const visible = medications.filter((row) => showArchived || row.archived_at === null);
 
@@ -505,9 +516,16 @@ export default function MedicationsManager({ initialMedications, specialists }: 
 
         {visible.length === 0 ? (
           <p className="text-muted-foreground mt-4 text-sm">
-            {medications.length === 0
-              ? "No medications yet. Add the first one above."
-              : "Every medication you track is archived. Turn on “Show archived” to see them."}
+            {/*
+              An empty list after a failed read is not an empty list. Saying
+              "no medications yet" there would state as fact the one thing the
+              page could not establish, directly under the notice saying so.
+            */}
+            {loadFailed
+              ? "Nothing could be loaded, so this list is not showing what you track. Reload the page to try again."
+              : medications.length === 0
+                ? "No medications yet. Add the first one above."
+                : "Every medication you track is archived. Turn on “Show archived” to see them."}
           </p>
         ) : (
           <ul className="mt-4 space-y-3">

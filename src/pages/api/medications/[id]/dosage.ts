@@ -1,9 +1,9 @@
 import type { APIRoute } from "astro";
 import { json, jsonError, readJsonBody, zodFieldErrors } from "@/lib/api/json";
+import { readId } from "@/lib/api/params";
 import { setDosage } from "@/lib/db/medications";
 import { createClient } from "@/lib/supabase";
 import { dosageInputSchema } from "@/lib/validation/medication";
-import { readId } from "../_shared";
 
 /**
  * Records the daily dosage in force today. Its own route because it writes

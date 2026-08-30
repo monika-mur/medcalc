@@ -1,9 +1,9 @@
 import type { APIRoute } from "astro";
 import { json, jsonError, readJsonBody, zodFieldErrors } from "@/lib/api/json";
+import { readId } from "@/lib/api/params";
 import { updateMedicationDetails } from "@/lib/db/medications";
 import { createClient } from "@/lib/supabase";
 import { medicationDetailsSchema } from "@/lib/validation/medication";
-import { readId } from "./_shared";
 
 /**
  * There is deliberately **no `DELETE` export**. FR-007 archives rather than
