@@ -1,7 +1,7 @@
 ---
 change_id: manage-doctor-visits
 title: Manage doctor visits — add, list, edit, and delete a visit (date + specialist)
-status: implemented
+status: impl_reviewed
 created: 2026-08-27
 updated: 2026-08-30
 archived_at: null
@@ -33,20 +33,20 @@ S-01 also set every pattern this slice inherits: the per-entity data module retu
 
 - **Delete is unconditional.** Nothing references `visits`, so there is no `409 still_referenced` path and no usage-count embed. The data module is strictly smaller than `specialists.ts`.
 - **A visit carries a foreign key the user picks.** `23503` therefore means something new here — "that specialist is not yours or no longer exists" — and is a **400 with a field error**, not the 409 it maps to in `deleteSpecialist`.
-- **A visit has a date, and dates need a "today".** Grouping and the past-date warning both need one, and they must be the *same* one.
+- **A visit has a date, and dates need a "today".** Grouping and the past-date warning both need one, and they must be the _same_ one.
 
 ### Decisions taken during planning
 
-| Decision                     | Choice                                                                             |
-| ---------------------------- | ---------------------------------------------------------------------------------- |
-| Past-dated visits            | Allowed. Hard-reject only outside 1900–2100                                        |
-| Past / far-future feedback   | Inline, non-blocking hint under the date field. Far future = more than 2 years out |
-| Duplicate visits             | Allowed. Client-side confirm dialog only — no constraint, no migration             |
-| List organisation            | Upcoming (ascending) then Past (descending)                                        |
-| Specialist control           | Native `<select>` wrapped in a new `src/components/form/SelectField.tsx`           |
-| Source of "today"            | `user_metadata.timezone`, UTC fallback, resolved once server-side and passed down  |
-| Surface                      | New `/visits` page + Topbar link                                                   |
-| Tests                        | None authored — S-01's standing posture held; contract queued in `follow-ups/`     |
+| Decision                   | Choice                                                                             |
+| -------------------------- | ---------------------------------------------------------------------------------- |
+| Past-dated visits          | Allowed. Hard-reject only outside 1900–2100                                        |
+| Past / far-future feedback | Inline, non-blocking hint under the date field. Far future = more than 2 years out |
+| Duplicate visits           | Allowed. Client-side confirm dialog only — no constraint, no migration             |
+| List organisation          | Upcoming (ascending) then Past (descending)                                        |
+| Specialist control         | Native `<select>` wrapped in a new `src/components/form/SelectField.tsx`           |
+| Source of "today"          | `user_metadata.timezone`, UTC fallback, resolved once server-side and passed down  |
+| Surface                    | New `/visits` page + Topbar link                                                   |
+| Tests                      | None authored — S-01's standing posture held; contract queued in `follow-ups/`     |
 
 Two consequences worth stating plainly, because both were chosen over a stronger alternative:
 
@@ -105,12 +105,12 @@ follows in the epilogue commit. No code changed this session; every edit is unde
 A third thing the plan did not predict, and the one that cost the most time:
 
 - **A dead local Supabase stack surfaces as an opaque `internal error;
-  reference = <id>` on sign-in, with no mention of Supabase, connections, or
+reference = <id>` on sign-in, with no mention of Supabase, connections, or
   ports.** Docker Desktop was not running, so `signInWithPassword` fetched a dead
   `127.0.0.1:54321`; under `@astrojs/cloudflare` the dev server runs in workerd,
   which swallowed the connection failure and re-emitted it with a fresh reference
   id per attempt. The id matches nothing in the codebase — `grep -rn "reference"
-  src/` finds no such string — and the accompanying `remote: true` is a
+src/` finds no such string — and the accompanying `remote: true` is a
   distraction, since the adapter auto-enables `IMAGES` and `SESSION` KV as remote
   bindings that no application code touches. **Check `docker info` before reading
   this error as an application fault.** Recovery was launching Docker Desktop and
@@ -137,3 +137,35 @@ by hand, swapping S-02's inline UTC `today` for `resolveToday("UTC")`, and
 migrating S-02's specialist `<select>` onto `SelectField`. Until task 2 lands,
 `CLAUDE.md` → _Dates_ deliberately stops short of claiming `resolveToday` is the
 only place a timezone is interpreted; that sentence would be false on arrival.
+
+### Implementation review — 2026-08-30
+
+`/10x-impl-review` run over the full plan. Report at
+`reviews/impl-review.md`; verdict **NEEDS ATTENTION** on 0 critical, 3 warning
+and 7 observation findings. All 12 planned items verified as implemented; all
+eight scope guardrails clean. Every gate re-run at review time: lint 0/0,
+typecheck 0/0 (5 pre-existing hints in `eslint.config.js`), 15 integration
+tests, 70 pgTAP assertions, build completing, and `src/db/` plus
+`supabase/migrations/` byte-identical to `master`.
+
+Correcting the claim two paragraphs above that nothing else diverged from the
+plan — **one adaptation was made and not recorded**:
+
+- **A `404` on edit prunes the row** (`VisitsManager.tsx:159-169`). The plan
+  described S-01's edit-failure handling, and `SpecialistsManager.handleEdit`
+  only sets errors and a notice. This slice additionally drops the row from
+  local state and closes the editor, because a `404` on `PATCH` means the row is
+  genuinely gone — deleted in another tab — and leaving an editor open over
+  something that is not there is a lie of the same kind the null-client guard in
+  `visits.astro` exists to prevent. The reasoning was already in a code comment;
+  what was missing was this record.
+
+One review finding was fixed during triage:
+
+- **F1 — a client-side validation failure was silent to assistive tech.**
+  `handleSubmit` clears the `aria-live` region and then, on a zod rejection,
+  only set field errors, so a screen-reader user pressing **Add visit** with no
+  specialist chosen heard nothing at all. `focusFirstError` now moves focus to
+  the topmost invalid control, whose `aria-describedby` error text is read on
+  arrival. `/specialists` carries the same hole and was deliberately left alone
+  per _What We're NOT Doing_; it is S-01's to fix.

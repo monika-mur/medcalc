@@ -109,3 +109,13 @@ Kept verbatim from `plan.md` → _Close-out_ so nothing is rediscovered:
   exercise the difference. Note that UTC is the *normal* path, not a degraded
   one: the zone is stamped only by the signup page's inline script, so every
   account the integration helper creates has no stored zone at all.
+- **`today` is resolved once per page render and never refreshes.** A tab left
+  open across midnight keeps a stale Upcoming/Past split and stale date hints
+  until reload. This is not a defect to test against — it is the direct
+  consequence of the rule the slice is built on (`CLAUDE.md` → _Dates_: resolve
+  once server-side, and an island must never call `new Date()`), and the
+  alternative reintroduces the second "today" that rule exists to prevent. Any
+  test pinning a `today` prop is testing the classification, not the freshness.
+  **S-04 inherits the same bound** for the dashboard's next-visit calculation
+  and should decide there, once, whether a long-lived tab warrants a refresh
+  mechanism — rather than rediscovering this as a visits bug.
