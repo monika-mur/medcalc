@@ -181,14 +181,14 @@ committed and pins `project_id = "medcalc"` plus fixed ports (API 54321, DB
 54322), so the CLI keys the same containers no matter which directory invokes
 it.
 
-**Problem**: `supabase db reset` re-applies migrations from the *invoking*
+**Problem**: `supabase db reset` re-applies migrations from the _invoking_
 worktree's `supabase/migrations/`, never the union of both. Once each slice
 adds its own migration the two sets diverge, so a reset from the medications
 worktree yields a database holding master's migrations plus that slice's — and
 no visits tables at all. It does not merely wipe the other agent's rows, it
 removes the other agent's schema, and the neighbouring session then fails
 against a database that no longer matches its branch. The quiet variant is
-worse: `npm run db:types` regenerates the *committed*
+worse: `npm run db:types` regenerates the _committed_
 `src/db/database.types.ts` from whatever schema happens to be applied, so
 running it while the other slice's migrations are live writes that slice's
 tables into this branch's types file, where it survives review as a plausible
@@ -202,3 +202,44 @@ read the database (editing code, writing migration files, `npm run dev`, lint,
 build) needs no claim and runs in parallel.
 
 **Applies to**: implement, impl-review
+
+## Open a pull request for every slice; never fast-forward master
+
+**Context**: Any slice or foundation change that has reached the end of
+`/10x-impl-review` and is ready to land. The shape to recognise: work sitting on
+a `feat/*` branch (often in its own worktree), findings triaged, and the branch
+already merged up to date with master — so `git checkout master && git merge
+feat/...` is a clean fast-forward and looks like the obvious next move.
+
+**Problem**: On 2026-08-30 S-02 (`manage-medications`) and S-03
+(`manage-doctor-visits`) landed exactly that way. Master was fast-forwarded to
+`b74cefb`, byte-identical to `feat/manage-doctor-visits`, and pushed — roughly
+38 commits across two slices with no pull request. F-01 and S-01 had both gone
+through one (#25, #26), so the omission is a lapse, not a convention.
+
+Four things follow, and only the first is obvious. **CI ran in the wrong
+order**: `.github/workflows/ci.yml:3-7` triggers on both `push` to master and
+`pull_request`, but on a push it runs `lint` and `build` and then deploys to
+production in the same job — so a failure would have been caught with master
+already poisoned and the bad commit already public. The `pull_request` path
+deploys the preview Worker instead, which is why `medcalc-preview` has still
+never been deployed. **The PR is unrecoverable**: both branches are now 0
+commits ahead of master, so GitHub refuses to open one ("there isn't anything to
+compare") — the gate cannot be reinstated after the fact, only skipped forever.
+**Issue closure silently stopped**: GitHub closes issues from PR merge bodies,
+so #3, #4 and sub-issues #13–#17 stayed open while their code was live in
+production, leaving the tracker disagreeing with both master and the roadmap.
+**The roadmap lost its evidence column**: `## Done` cites "PR #26 · live in
+production" for S-01 and has no equivalent to cite for S-02 or S-03, so those
+rows have to name commit ranges instead. The fast-forward also carried six pairs
+of duplicated cherry-picked commits onto master unreviewed.
+
+**Rule**: Land every change through a pull request against master — push the
+`feat/*` branch, open the PR, let CI run on it, and merge it there. Never `git
+merge` a feature branch into a local master and never fast-forward master onto a
+branch tip, however clean the merge looks. Close the roadmap item and its GitHub
+issues from the PR, not by hand afterwards. Treat this as irreversible: once
+master carries the commits, the branch is 0 ahead and no PR can be opened for
+them.
+
+**Applies to**: plan, implement, impl-review
