@@ -18,6 +18,14 @@ jobs:
       - run: npm ci
       - run: npx astro sync
       - run: npm run lint
+      # `astro build` does NOT run `astro check` -- they are separate commands,
+      # and the build's transform step type-checks neither `.astro` frontmatter
+      # nor the islands. Without this step a type regression reaches production.
+      # `astro sync` above generates `.astro/types.d.ts`, which `astro check`
+      # needs. Baseline on master is 0 errors / 5 pre-existing ts(6387) hints in
+      # eslint.config.js; `astro check` exits non-zero on errors only, so the
+      # hints do not block -- do not "fix" them to quieten this step.
+      - run: npm run typecheck
       - run: npm run build
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -27,8 +35,8 @@ jobs:
       # production: the Astro Cloudflare adapter emits dist/server/wrangler.json
       # flattened, with no `env` block, and wrangler redirects to that file via
       # .wrangler/deploy/config.json — so `--env preview` had nothing to select
-      # and fell through to the top-level Worker, without a warning. Lint and
-      # build are the PR gate; deploys happen on master only.
+      # and fell through to the top-level Worker, without a warning. Lint, type
+      # check and build are the PR gate; deploys happen on master only.
       - name: Deploy to production
         if: github.event_name == 'push'
         uses: cloudflare/wrangler-action@v3

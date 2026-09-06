@@ -132,6 +132,23 @@ own index when that screen is built.
 
 ## F9 — Gate CI on the test suites this change added
 
+**Status 2026-09-06**: ⏳ **partially done.** Step 1 (the `typecheck`
+script, wired into CI) is complete — see
+`manage-doctor-visits/follow-ups/typecheck-in-ci.md`, which is the same item
+and now carries the close-out. Steps 2 and 3 — stand the Supabase stack up in
+CI, run `db:test` and `npm test`, and order the deploy behind them — remain
+open, and were **deliberately deferred on 2026-09-06**: S-02 and S-03 both
+shipped with no tests, so the 70 pgTAP assertions and 15 Vitest tests cover
+F-01 and S-01 only. Gating on them would buy CI minutes for the best-tested
+half of the app. Revisit once `deferred-tests.md`, `visits-tests.md` and
+`specialists-tests.md` have drained.
+
+**Note on scope**: this entry is about *tests*. It does **not** cover migration
+drift — two migrations have now sat merged-but-unapplied (`20260821182457`,
+`20260829071323`, the latter causing a live 500 for eight days). That is
+tracked separately; the F-01 plan's "db push stays a deliberate manual step"
+decision is what a drift check has to respect.
+
 **Source**: F9 (OBSERVATION, Success Criteria) — `.github/workflows/ci.yml`
 
 **Why deferred**: wiring a Supabase service container into CI is its own change,
