@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [master]
 
+  # Lets the migration check be run on demand — to prove it works before it
+  # ever gates a deploy, and to re-verify after a manual `db push` without
+  # re-running a whole merge.
+  workflow_dispatch:
+
 jobs:
   ci:
     runs-on: ubuntu-latest
@@ -30,6 +35,20 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      # Blocks the deploy when a migration is merged but never applied to cloud.
+      # Ordered ahead of the deploy deliberately: shipping code that assumes a
+      # policy or column the live database does not have is exactly how the
+      # same-day dosage edit returned a 500 for eight days. This does not apply
+      # anything — `db push` stays the manual step F-01 chose. Re-run the
+      # workflow after pushing to clear it.
+      - name: Check migrations are applied to cloud
+        if: github.event_name != 'pull_request'
+        run: node scripts/check-migration-drift.mjs
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          # Not a secret: the ref is already committed in this public repo, in
+          # context/changes/domain-schema-foundation/change.md
+          SUPABASE_PROJECT_REF: nkqbiphgoemmehflgogz
       # Pull requests deliberately do not deploy. The previous "Deploy preview
       # Worker" step ran `deploy --env preview` and silently shipped every PR to
       # production: the Astro Cloudflare adapter emits dist/server/wrangler.json
