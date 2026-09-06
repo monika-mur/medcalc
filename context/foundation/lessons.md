@@ -277,3 +277,44 @@ deploy prints is the one you meant. Do not infer the target from the
 hand-written config — that file may not be what the deploy command reads.
 
 **Applies to**: plan, plan-review, implement, impl-review
+
+## Confirm every migration reached cloud; a green local suite cannot
+
+**Context**: Any change that ships a file under `supabase/migrations/`. The
+shape to recognise is the comfortable one: the migration is written, `db reset`
+re-applies it, pgTAP and the integration suite are green, the PR merges, the
+roadmap row moves to Done. Every signal available in the repo says the work is
+finished.
+
+**Problem**: None of those signals is about the cloud project. `db reset`,
+`db:test` and `npm test` all run against the local stack, which has the
+migration by construction — so they pass, and would pass just as happily if the
+migration had never been applied anywhere else. Applying to cloud is a separate
+manual `db push`, chosen deliberately in the F-01 plan, and nothing connected
+the two.
+
+It happened twice in five weeks. `20260821182457` carried
+`revoke … from anon` and sat unapplied for six days, leaving production
+protected by RLS alone where the design intends two mechanisms; it was caught
+only because an S-01 review finding sent someone back to read `migration list`.
+`20260829071323` relaxed the `dosage_changes` DELETE policy that
+`setDosage`'s delete-then-insert depends on, and sat unapplied for eight —
+during which changing a medication's dosage on the day it was created returned
+a **500 in production**, from S-02's deploy on 2026-08-30 until 2026-09-06. It
+was found by accident, while checking something unrelated before starting S-04.
+
+The second one is the instructive half. The code shipped, the tests were green,
+the roadmap said Done, and the feature was broken for real users for over a
+week — and the thing standing between the repo and that fact was one query
+nobody had a reason to run.
+
+**Rule**: Treat _merged_ and _applied_ as different states, and close a
+migration only against the environment it has to run in — `migration list` on
+the linked project, or the policy or column read back from the live database.
+Never let a passing local suite stand as evidence about cloud. Where the push
+stays manual by design, something automated must still notice that it has not
+happened: `scripts/check-migration-drift.mjs` blocks the deploy on that
+condition, and a change that routes around it is reintroducing the silence, not
+the manual step.
+
+**Applies to**: plan, plan-review, implement, impl-review
