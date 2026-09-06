@@ -243,3 +243,37 @@ master carries the commits, the branch is 0 ahead and no PR can be opened for
 them.
 
 **Applies to**: plan, implement, impl-review
+
+## Read the deploy log for the target name; a generated config drops `--env`
+
+**Context**: Any deploy invocation whose configuration is produced by a build
+step rather than committed by hand — on this project `npm run build` writes
+`.wrangler/deploy/config.json` pointing wrangler at `dist/server/wrangler.json`,
+which `@astrojs/cloudflare` generates. The shape to recognise: a hand-written
+config declares an environment, a CI step passes `--env <name>`, and nobody has
+ever confirmed the resulting artifact exists.
+
+**Problem**: `wrangler.jsonc` declared `env.preview.name: "medcalc-preview"` and
+`.github/workflows/ci.yml` ran `wrangler deploy --env preview` on every pull
+request. The adapter emits `dist/server/wrangler.json` **flattened** — it carries
+`"name":"medcalc"`, `"legacy_env":true` and `"definedEnvironments":["preview"]`,
+but no `env` block. `definedEnvironments` is metadata; there was no environment
+to select, so `--env preview` matched nothing and fell through to the top-level
+Worker. Every pull request therefore deployed its unmerged code straight to
+production for roughly three weeks.
+
+What made it survive that long is that **wrangler emitted no warning**. An
+unknown environment is not an error here; the log reads exactly like a successful
+preview deploy until you notice the name. Run 33659141993 logged `Uploaded
+medcalc` → `https://medcalc.medcalc.workers.dev`, while
+`medcalc-preview.medcalc.workers.dev` returned 404 the entire time — the preview
+Worker the config described had never been created. The absence of that Worker
+was the only observable symptom, and nothing was watching for it.
+
+**Rule**: When a build step generates or redirects the deploy configuration,
+treat every config-derived flag as unverified until a deploy log confirms the
+target by name. Read the `Uploaded <name>` line, and check that the URL the
+deploy prints is the one you meant. Do not infer the target from the
+hand-written config — that file may not be what the deploy command reads.
+
+**Applies to**: plan, plan-review, implement, impl-review
