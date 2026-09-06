@@ -1,11 +1,31 @@
 # Push `20260829071323` to cloud — the same-day dosage fix is local-only
 
-**Status**: 🔴 **OPEN — live production defect.** Confirmed 2026-09-06 against
-the cloud project's SQL Editor: the DELETE policy on `dosage_changes` is still
-named `dosage_changes_delete_future_own`. The rename to
+**Status**: ✅ **RESOLVED 2026-09-06.** Pushed with `npx supabase db push` after
+a `--dry-run` confirmed exactly one pending migration, no seeds and no roles —
+the same three-condition gate this file specifies below. `migration list` now
+shows all three migrations on both Local and Remote.
+
+The defect had been live since S-02 deployed on 2026-08-30. The rest of this
+entry is kept as written, because the reasoning is the part worth preserving —
+and because the same "merged but never applied" condition will apply to the next
+migration until F9 closes it structurally.
+
+**Corporate network note**: the push could not run from the office connection.
+`migration list` failed with `failed to connect as temp role: … host=aws-1-eu-central-1.pooler.supabase.com … Connection timed out` — a blocked
+Postgres port, not TLS, so `NODE_TLS_REJECT_UNAUTHORIZED` does not help and the
+CLI's own `SUPABASE_DB_PASSWORD` hint is a red herring. Switching to a phone
+hotspot was enough. Reach for that before reaching for a SQL-Editor workaround,
+which would apply the change without recording it in
+`supabase_migrations.schema_migrations` and leave the CLI seeing drift.
+
+---
+
+**Originally filed as**: 🔴 OPEN — live production defect. Confirmed 2026-09-06
+against the cloud project's SQL Editor: the DELETE policy on `dosage_changes`
+was still named `dosage_changes_delete_future_own`. The rename to
 `dosage_changes_delete_uncommitted_own` is the last statement of
 `supabase/migrations/20260829071323_relax_same_day_dosage_correction.sql`, so
-the old name is proof the migration never ran there.
+the old name was proof the migration had never run there.
 
 **Source**: not an impl-review finding. Surfaced 2026-09-06 while checking what
 blocked S-04. Nothing queued the push when S-02 landed — F-01 recorded its push
