@@ -1,5 +1,18 @@
 # Follow-up — wire `npm run typecheck` into CI
 
+**Status**: ✅ **RESOLVED 2026-09-06.** `- run: npm run typecheck` now sits
+between `lint` and `build` in `.github/workflows/ci.yml`. Verified on master
+immediately before wiring it up: **0 errors, 0 warnings, 5 hints** across 61
+files, so S-02's never-gated code passes too — the open question at the bottom
+of this entry is answered. The 5 hints are the pre-existing `ts(6387)` notices
+in `eslint.config.js`; `astro check` exits non-zero on errors only.
+
+This entry is the **same item** as F9 step 1 in
+`domain-schema-foundation/follow-ups/review-fixes.md`, collapsed here per the
+roadmap's `## Done` note. F9's remaining steps (stand the Supabase stack up in
+CI, run the suites, order the deploy behind them) are **not** covered by this
+and stay open there.
+
 **Source**: `/10x-impl-review` of S-03, 2026-08-30 (finding F6, report at
 `reviews/impl-review.md`). Queued rather than fixed, because `.github/workflows/ci.yml`
 is a shared file and this slice merges second — see `plan.md` → _Merge order_.
