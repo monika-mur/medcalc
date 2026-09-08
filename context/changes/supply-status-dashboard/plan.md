@@ -485,11 +485,11 @@ Rollback is `git revert` — nothing is written that the previous code cannot re
 
 #### Manual
 
-- [x] 1.4 `/medications` still lists, creates, edits, archives, restores, refills and corrects with no visible regression
-- [x] 1.5 A long-stale medication shows 0 on hand and the out-of-stock label
-- [x] 1.6 The correction panel pre-fills with the projected figure
-- [x] 1.7 "No dosage recorded" and "Not used" are distinguishable on `/medications`
-- [x] 1.8 The six worked examples produce the stated dates, examples 5 and 6 walked deliberately
+- [x] 1.4 `/medications` still lists, creates, edits, archives, restores, refills and corrects with no visible regression — b0600ad
+- [x] 1.5 A long-stale medication shows 0 on hand and the out-of-stock label — b0600ad
+- [x] 1.6 The correction panel pre-fills with the projected figure — b0600ad
+- [x] 1.7 "No dosage recorded" and "Not used" are distinguishable on `/medications` — b0600ad
+- [x] 1.8 The six worked examples produce the stated dates, examples 5 and 6 walked deliberately — b0600ad
 
 ### Phase 2: The dashboard
 

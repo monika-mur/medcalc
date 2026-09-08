@@ -100,8 +100,23 @@ records.
 was needed; the four browser checks and the harness all behaved as the plan
 described.
 
-Phase 1 committed. The transient below is now the only known defect in the
-working tree, and Phase 3 closes it.
+Phase 1 landed as **three** commits rather than one, at the developer's
+request, because the working tree carried two unrelated dirty sets:
+
+- `b0600ad` — the engine, the data module, the six callers, the island and
+  this change folder.
+- `f75ee41` — `prd.md` (the red-equality reading, written up as a partition on
+  days of cover after the visit) and the `roadmap.md` S-04 flip. The roadmap
+  flip therefore **is** committed, contrary to the note left on 2026-09-06
+  saying it would be held back.
+- `530be8e` — the `@przeprogramowani/10x-cli` sync to Module 2 Lesson 4,
+  including every `CLAUDE.md` edit, all of which sit inside the managed block
+  at lines 112-163. **This clears the Phase 2 staging question** below: the
+  toolkit churn is gone, so the Phase 2 commit can carry `CLAUDE.md` alone and
+  criterion 2.13's `git show --stat` evidence stays honest.
+
+The transient below is now the only known defect in the working tree, and
+Phase 3 closes it.
 
 ---
 
@@ -119,11 +134,9 @@ recount write path) are untouched.
   commit and has never been pushed. `master` must not be fast-forwarded onto it
   — `lessons.md` → _Open a pull request for every slice_.
 - **Progress 1.1–1.8 all ticked.** Phase 1 is closed.
-- `context/foundation/roadmap.md` S-04 flipped to `in-progress` in both the
-  At-a-glance row and the item body. **Still unstaged, deliberately**: the file
-  already carried uncommitted edits when the previous run started, so the flip
-  was kept out of the phase commit. Commit it separately, or leave it for
-  close-out.
+- `context/foundation/roadmap.md` S-04 reads `in-progress` in both the
+  At-a-glance row and the item body, **committed** in `f75ee41`.
+- **The working tree is clean.** Nothing is left dirty from this run.
 
 ### Files committed in Phase 1
 
@@ -167,14 +180,9 @@ needs a second specialist and at least one visit on top of them.
    in-repo record of what it asserts, and close-out item C.1 turns it into
    `follow-ups/supply-engine-tests.md`.
 
-### Unresolved for Phase 2 (decide before staging)
+### Resolved before Phase 2
 
-- Phase 2 change 5 edits `CLAUDE.md`, which **already carries unrelated
-  uncommitted changes** (a `@przeprogramowani/10x-cli` block update, Module 2
-  Lesson 3 → Lesson 4). Criterion 2.13 wants `CLAUDE.md` in the Phase 2 commit,
-  so that commit will either carry the toolkit-block churn too or the churn
-  needs committing separately first. **Committing the churn on its own, before
-  Phase 2 starts, is the cleaner of the two** — it keeps 2.13's
-  `git show --stat` evidence honest about what the dashboard actually changed.
-- `.claude/**` and `context/foundation/prd.md` are also dirty from before this
-  run and are unrelated to S-04.
+The `CLAUDE.md` staging conflict flagged on 2026-09-06 is **gone**. The toolkit
+churn, `.claude/**` and `prd.md` were all committed in this session, so Phase 2
+change 5 can amend `CLAUDE.md` lines 65 and 94 and commit the file alongside
+the dashboard code with nothing extra riding along.
