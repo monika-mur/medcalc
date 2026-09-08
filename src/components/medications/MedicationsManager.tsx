@@ -55,13 +55,20 @@ const GENERIC_ERROR = "Something went wrong. Please try again.";
 
 /**
  * The badge always carries a word — colour is the redundant cue, never the only
- * one. Green is rationed to `active` and red to `out_of_stock`; the other two
- * are neutral because they are states the user chose, not warnings. There is no
- * amber token in `:root`, and this slice deliberately does not invent one: the
- * green/yellow/red supply scale belongs to S-04.
+ * one. Green is rationed to `active`, red to the two states the user has to act
+ * on; the rest are neutral because they are states the user chose, not
+ * warnings.
+ *
+ * `no_dosage` is red rather than muted because it is not a state anyone chose:
+ * the medication has no `dosage_changes` row at all, so nothing about its
+ * supply can be calculated. Both maps are `Record<MedicationStatus, string>`,
+ * so adding a variant to that union fails the build until it is labelled here —
+ * which is the reason the variant lives on the union rather than being derived
+ * ad hoc on the dashboard.
  */
 const STATUS_LABEL: Record<MedicationStatus, string> = {
   active: "Active",
+  no_dosage: "No dosage recorded",
   not_used: "Not used",
   out_of_stock: "Out of stock",
   archived: "Archived",
@@ -69,6 +76,7 @@ const STATUS_LABEL: Record<MedicationStatus, string> = {
 
 const STATUS_CLASS: Record<MedicationStatus, string> = {
   active: "text-primary",
+  no_dosage: "text-destructive",
   not_used: "text-muted-foreground",
   out_of_stock: "text-destructive",
   archived: "text-muted-foreground",
@@ -215,7 +223,7 @@ export default function MedicationsManager({ initialMedications, specialists, lo
     } else if (kind === "refill") {
       setRefillValue("");
     } else {
-      setCountedValue(String(medication.quantity_on_hand));
+      setCountedValue(String(medication.projected_quantity));
     }
   }
 
@@ -318,7 +326,7 @@ export default function MedicationsManager({ initialMedications, specialists, lo
 
     applyRow(updated);
     closePanel();
-    setNotice({ tone: "success", text: `${updated.name} refilled — ${String(updated.quantity_on_hand)} on hand.` });
+    setNotice({ tone: "success", text: `${updated.name} refilled — ${String(updated.projected_quantity)} on hand.` });
   }
 
   async function handleCorrect(event: SubmitEvent<HTMLFormElement>, id: string) {
@@ -339,7 +347,7 @@ export default function MedicationsManager({ initialMedications, specialists, lo
 
     applyRow(updated);
     closePanel();
-    setNotice({ tone: "success", text: `${updated.name} corrected to ${String(updated.quantity_on_hand)} on hand.` });
+    setNotice({ tone: "success", text: `${updated.name} corrected to ${String(updated.projected_quantity)} on hand.` });
   }
 
   async function handleArchive(medication: MedicationView, archived: boolean) {
@@ -512,7 +520,7 @@ export default function MedicationsManager({ initialMedications, specialists, lo
                           </div>
                           <div className="flex gap-1">
                             <dt>On hand:</dt>
-                            <dd className="text-foreground">{String(medication.quantity_on_hand)}</dd>
+                            <dd className="text-foreground">{String(medication.projected_quantity)}</dd>
                           </div>
                           <div className="flex gap-1">
                             <dt>Expires:</dt>

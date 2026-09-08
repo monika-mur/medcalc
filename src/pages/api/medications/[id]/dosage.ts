@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { json, jsonError, readJsonBody, zodFieldErrors } from "@/lib/api/json";
 import { readId } from "@/lib/api/params";
+import { resolveTodayForUser } from "@/lib/dates";
 import { setDosage } from "@/lib/db/medications";
 import { createClient } from "@/lib/supabase";
 import { dosageInputSchema } from "@/lib/validation/medication";
@@ -40,7 +41,12 @@ export const POST: APIRoute = async (context) => {
     return jsonError(400, "Check the highlighted fields", zodFieldErrors(parsed.error));
   }
 
-  const result = await setDosage(supabase, id, parsed.data.daily_dosage);
+  const result = await setDosage(
+    supabase,
+    id,
+    parsed.data.daily_dosage,
+    resolveTodayForUser(context.locals.user.user_metadata),
+  );
   if (!result.ok) {
     if (result.error === "not_found") {
       return jsonError(404, "Medication not found");

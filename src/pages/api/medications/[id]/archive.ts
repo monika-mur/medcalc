@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { z } from "zod";
 import { json, jsonError, readJsonBody } from "@/lib/api/json";
 import { readId } from "@/lib/api/params";
+import { resolveTodayForUser } from "@/lib/dates";
 import { setArchived } from "@/lib/db/medications";
 import { createClient } from "@/lib/supabase";
 
@@ -45,7 +46,12 @@ export const POST: APIRoute = async (context) => {
   }
 
   // The timestamp is the module's to set. `archived` is an intent, not a value.
-  const result = await setArchived(supabase, id, parsed.data.archived);
+  const result = await setArchived(
+    supabase,
+    id,
+    parsed.data.archived,
+    resolveTodayForUser(context.locals.user.user_metadata),
+  );
   if (!result.ok) {
     if (result.error === "not_found") {
       return jsonError(404, "Medication not found");
