@@ -121,6 +121,7 @@ Before any reading, identify what kinds of upstream artifacts the user passed in
    - Identify any discrepancies or misunderstandings
    - Note assumptions that need verification
    - Determine true scope based on codebase reality
+   - **Run a smallest-counterexample pass before choosing interview questions.** For ordered selections, place equal comparison values across the cutoff; for counted sets, vary the identity/equivalence rule; for state thresholds, vary inclusivity and governing clock. Ask every case that yields different user-visible outcomes in the first round. Existing behaviour supplies one option, not the answer.
 
 5. **Present informed understanding and assess complexity**:
 
