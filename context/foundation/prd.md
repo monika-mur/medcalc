@@ -28,6 +28,7 @@ Most medication-management tools are reminder apps — they tell the user when t
 **Moment of use:** The user reaches for MedCalc before or during a doctor's appointment to answer the question "which medications do I need a new prescription for today?" — typically on a phone. They also use it at home on a computer to update dosages or add medications after a visit.
 
 **Key behaviors:**
+
 - Adds a medication when first prescribed; updates the quantity after filling a prescription
 - Updates or pre-schedules dosage changes when a doctor adjusts them, including mid-supply changes with a future effective date
 - Checks the dashboard before each doctor's appointment to see which prescriptions to request
@@ -36,12 +37,15 @@ Most medication-management tools are reminder apps — they tell the user when t
 ## Success Criteria
 
 ### Primary
+
 The user adds one or more medications (name, quantity on hand, expiry date, daily dosage, prescribing specialist) and one or more upcoming doctor visit dates (each linked to a specialist). The app calculates and displays — for each medication — the date until which the current supply lasts and whether that supply will outlast the next visit with the appropriate specialist. The user can update dosage (including future dosage changes with an effective date) or quantity at any time, and the calculation updates immediately.
 
 ### Secondary
-Each medication on the dashboard shows a color-coded status indicator: green (supply ends more than 14 days after the next specialist visit), yellow (supply ends within 14 days of the next visit), red (supply ends before the next visit, or the medication's expiry date is reached before the next visit).
+
+Each medication on the dashboard shows a color-coded status indicator: green (supply ends more than 14 days after the next specialist visit), yellow (supply ends 1 to 14 days after the next visit), red (supply ends on or before the next visit, or the medication's expiry date is reached on or before the next visit).
 
 ### Guardrails
+
 - **Calculation accuracy:** The supply-end date calculation is arithmetically correct at all times. An incorrect "you have enough" result is a product failure regardless of how smooth the rest of the experience is.
 - **Mobile browser usability:** All primary flows — viewing the dashboard, adding a medication, updating dosage or quantity, adding a visit date — are completable on a phone-sized screen in a mobile browser without horizontal scrolling.
 
@@ -54,6 +58,7 @@ Each medication on the dashboard shows a color-coded status indicator: green (su
 - **Then** they see — for each medication assigned to that internist — the calculated supply-end date and a color-coded status showing whether supply will last until the visit
 
 #### Acceptance Criteria
+
 - Each medication assigned to the internist displays its supply-end date
 - Status is green, yellow, or red per the hardcoded thresholds
 - Medications assigned to other specialists are also visible on the dashboard, each linked to their own specialist's next visit date
@@ -66,6 +71,7 @@ Each medication on the dashboard shows a color-coded status indicator: green (su
 - **Then** the dashboard immediately recalculates the supply-end date — using the current dosage until Sunday, the new dosage from Monday — and updates the color status accordingly
 
 #### Acceptance Criteria
+
 - The recalculated supply-end date reflects the segmental calculation: old dose consumed through the day before the change date, new dose from the change date onward
 - The color status updates to reflect the new supply-end date relative to the next visit
 - The dosage change is stored with a timestamp
@@ -73,42 +79,53 @@ Each medication on the dashboard shows a color-coded status indicator: green (su
 ## Functional Requirements
 
 ### Authentication
+
 - FR-001: User can register with email and password. Priority: must-have
+
   > Socrates: Counter-argument "no-auth local app is faster to ship" considered. Rejected: access from phone (at visit) + computer (at home) requires server-side accounts — the core use case breaks without cross-device access.
 
 - FR-002: User can log in and log out of their account. Priority: must-have
-  *(covered by FR-001 Socrates above)*
+  _(covered by FR-001 Socrates above)_
 
 ### Specialists
+
 - FR-003: User can add a specialist (name, specialty) to track visits and medications for. Priority: must-have
   > Socrates: Counter-argument "a free-text field per medication/visit is enough" considered. Rejected: reliable medication↔visit linkage requires a managed entity — inconsistent spelling of specialist names breaks the core calculation.
 
 ### Medications
+
 - FR-004: User can add a medication: name, quantity on hand, printed expiry date, daily dosage (units/day), assigned specialist. Priority: must-have
+
   > Socrates: Counter-argument "one medication could be prescribed by multiple specialists" considered. Rejected for v1: in practice the user knows which specialist to see for a given prescription; the multi-source edge case is deferred to v2.
 
 - FR-005: User enters dosage as a simple daily total (units/day). Priority: must-have
+
   > Socrates: Counter-argument "split entry mode — N units, M times/day — helps users think naturally, as on a leaflet" considered. **Partially accepted:** split mode is deferred to v2; v1 accepts a single daily total only. Users who think in doses-per-administration convert manually for now.
 
 - FR-006: User can add a future dosage change with an effective date (e.g. "from Monday: 1.5 units/day instead of 1"). Priority: must-have
+
   > Socrates: Counter-argument "future dosage changes complicate the calculation model — defer to v2" considered. Rejected: mid-supply dosage changes are the hardest case existing medication apps get wrong. Omitting this FR means the MVP does not solve the core stated problem.
 
 - FR-007: User can edit a medication (quantity on hand, dosage, expiry date, assigned specialist). When a user removes a medication, it is archived rather than permanently deleted — the medication's data is retained for the v2 history feature. Priority: must-have
+
   > Socrates: Counter-argument "permanent deletion is simpler for MVP" considered. **Overridden:** archival chosen because permanent deletion would destroy records required by the v2 history feature.
 
 - FR-008: User can mark a medication as liquid and enter: container capacity, estimated daily consumption, post-opening expiry duration. Priority: must-have
   > Socrates: Counter-argument "estimates without historical data give false precision — defer" considered. Rejected: even an approximate estimate enables a calculation where otherwise none is possible for liquid medications; the user can refine the estimate over time.
 
 ### Doctor Visits
+
 - FR-009: User can add a doctor visit: date, specialist (selected from the user's defined specialist list). Priority: must-have
+
   > Socrates: "What happens when a visit passes and no new one has been entered?" surfaced. Addressed in FR-011: the dashboard displays "no visit scheduled" rather than silently failing or showing a stale status.
 
 - FR-010: User can edit and delete a doctor visit. Priority: must-have
-  *(covered by FR-009 Socrates above)*
+  _(covered by FR-009 Socrates above)_
 
 ### Dashboard
+
 - FR-011: User sees a dashboard listing each medication with its calculated supply-end date and a color-coded status (green / yellow / red) relative to the next scheduled visit with the assigned specialist. When no future visit is scheduled for a medication's specialist, the dashboard shows "no visit scheduled" in place of the status indicator. Priority: must-have
-  > Socrates: Counter-argument "color thresholds should be user-configurable" considered. Rejected for v1: hardcoded defaults (green = supply ends more than 14 days after next visit; yellow = within 14 days; red = before visit or before medication expiry) are sufficient for MVP. Configurable thresholds are v2.
+  > Socrates: Counter-argument "color thresholds should be user-configurable" considered. Rejected for v1: hardcoded defaults (green = supply ends more than 14 days after next visit; yellow = 1 to 14 days after; red = on or before the visit, or medication expiry reached on or before it) are sufficient for MVP. Configurable thresholds are v2.
 
 ## Non-Functional Requirements
 
@@ -127,10 +144,15 @@ For liquid medications (e.g. eye drops), the user additionally provides the cont
 All medication state changes — dosage adjustments, quantity updates, archival — are recorded with timestamps from the first day the product is used. This record must be complete enough that a full usage history can be reconstructed at any point in time. The interface for browsing that history is a v2 feature; the underlying record is a v1 requirement.
 
 **Color status thresholds (v1, hardcoded):**
+
+The three bands partition on how many days of supply remain _after_ the next visit: more than 14, between 1 and 14, or none.
+
 - Green: supply-end date is more than 14 days after the next specialist visit.
-- Yellow: supply-end date is within 14 days of the next specialist visit (supply ends ≤ 14 days after the visit date).
-- Red: supply-end date is before the next specialist visit, OR the medication's printed expiry date (or post-opening expiry, for liquid medications) is reached before the next visit.
+- Yellow: supply-end date is 1 to 14 days after the next specialist visit.
+- Red: supply-end date is on or before the next specialist visit, OR the medication's printed expiry date (or post-opening expiry, for liquid medications) is reached on or before the next visit.
 - No status: no future visit is scheduled for this medication's specialist.
+
+A supply ending exactly on the visit date is red, not yellow. Every medication in the yellow band still has cover left after the appointment; this one has none — the day after the visit there is nothing, and the visit is the last opportunity to obtain a prescription for it.
 
 ## Access Control
 
