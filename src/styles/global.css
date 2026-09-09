@@ -13,6 +13,20 @@
   and fails AA for text, 700 is 5.02:1 and passes. 600 is kept for the focus
   ring and other non-text UI, where the threshold is 3:1.
 
+  `--warning` follows that same rule and is the reason it is amber-700 rather
+  than the brighter shade the eye expects. Measured on white: amber-500 is
+  2.15:1, which fails even the 3:1 non-text threshold; amber-600 is 3.19:1, the
+  "borders and rings only" band `--ring` sits in; amber-700 is 5.02:1 — the
+  identical ratio `--primary` achieves. The yellow supply badge is text, so 700
+  is the only shade that works. It reads as burnt orange rather than a bright
+  warning yellow, which is the same cost the palette already pays for green:
+  `--primary` is a deep forest green, not a vivid one. Do not "fix" either token
+  to a lighter shade — the fix is the failure.
+
+  There is no `--warning-foreground`. That token would only earn its place with
+  a filled amber background, and a filled badge is exactly what the rationing
+  rule forbids.
+
   `--border` and `--input` are deliberately different. Card edges and the
   topbar rule are decorative and exempt under WCAG 1.4.11, so they keep the
   soft slate-200 (1.35:1). A field's boundary is what makes the control
@@ -39,6 +53,7 @@
   --accent: oklch(0.968 0.007 247.896); /* slate-100 */
   --accent-foreground: oklch(0.208 0.042 265.755); /* slate-900 */
   --destructive: oklch(0.577 0.245 27.325); /* red-600  #DC2626 */
+  --warning: oklch(0.555 0.163 48.998); /* amber-700 #B45309 */
   --border: oklch(0.929 0.013 255.508); /* slate-200 #E2E8F0 */
   --input: oklch(0.704 0.04 256.788); /* slate-400 #94A3B8 */
   --ring: oklch(0.627 0.194 149.214); /* green-600 #16A34A */
@@ -111,6 +126,10 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  /* Required as well as the `:root` entry: Tailwind v4 resolves utility classes
+     from this block, so a token defined only above compiles clean and yields no
+     `text-warning` class at all. */
+  --color-warning: var(--warning);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);

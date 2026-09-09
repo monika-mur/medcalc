@@ -1,24 +1,82 @@
 ---
+import SpecialistGroupSection from "@/components/dashboard/SpecialistGroup.astro";
 import Topbar from "@/components/Topbar.astro";
 import Layout from "@/layouts/Layout.astro";
+import { buildDashboard, type SpecialistGroup } from "@/lib/dashboard";
+import { resolveTodayForUser } from "@/lib/dates";
+import { listMedications } from "@/lib/db/medications";
+import { listVisits } from "@/lib/db/visits";
+import { createClient } from "@/lib/supabase";
 
-const { user } = Astro.locals;
+// Fetched and computed server-side. This page mounts no island: nothing on it
+// is interactive, so hydrating it would cost bytes on the exact path the NFR
+// constrains — all supply statuses displayed within one second for up to 20
+// medications on a standard mobile network — and buy no behaviour.
+const supabase = createClient(Astro.request.headers, Astro.cookies);
+
+// Resolved once, in the user's own zone, and passed down. Nothing below calls
+// `new Date()`; a second "today" is what lets a grouping and a card disagree
+// about the same row. See `CLAUDE.md` -> _Dates_.
+const today = resolveTodayForUser(Astro.locals.user?.user_metadata);
+
+let groups: SpecialistGroup[] = [];
+let hasMedications = false;
+let loadFailed = !supabase;
+
+if (supabase) {
+  const [medicationResult, visitResult] = await Promise.all([listMedications(supabase, today), listVisits(supabase)]);
+
+  if (medicationResult.ok && visitResult.ok) {
+    hasMedications = medicationResult.data.some((medication) => medication.archived_at === null);
+    groups = buildDashboard(medicationResult.data, visitResult.data, today);
+  } else {
+    // A failed visit read is just as blocking as a failed medication read: every
+    // status on this screen is a comparison against a visit date, so a group
+    // rendered without them would read "no visit scheduled" for a user who has
+    // one — stating as fact the thing the page could not establish.
+    loadFailed = true;
+  }
+}
 ---
 
 <Layout title="Dashboard">
-  <!--
-    The Topbar is the only navigation between domain screens, so every signed-in
-    page carries it. Its own sign-out form is why this page no longer has one.
-    S-04 still owns building the dashboard; this is chrome, not content.
-  -->
   <Topbar />
-  <div class="flex items-center justify-center p-4 py-16">
-    <div class="border-border bg-card rounded-2xl border p-8 text-center shadow-sm">
-      <h1 class="text-foreground mb-4 text-3xl font-bold">Dashboard</h1>
-      <p class="text-muted-foreground">
-        Welcome, <span class="text-foreground font-semibold">{user?.email}</span>
+  <main class="px-4 py-8 sm:px-6">
+    <div class="mx-auto w-full max-w-3xl">
+      <h1 class="text-foreground text-2xl font-bold">Dashboard</h1>
+      <p class="text-muted-foreground mt-1 text-sm">
+        How long each medication lasts, and whether that reaches your next visit with the specialist who prescribes it.
       </p>
-      <p class="text-muted-foreground mt-2 text-sm">This page is only for authenticated users.</p>
+
+      {
+        loadFailed && (
+          <p class="border-destructive/40 text-destructive mt-6 rounded-md border px-4 py-3 text-sm">
+            Your dashboard could not be loaded. Reload the page to try again.
+          </p>
+        )
+      }
+
+      {
+        !loadFailed && !hasMedications && (
+          <p class="border-border text-muted-foreground mt-6 rounded-md border px-4 py-3 text-sm">
+            Nothing to calculate yet — add a medication and the supply status appears here.{" "}
+            <a href="/medications" class="text-primary rounded-sm font-medium hover:underline">
+              Add a medication
+            </a>
+            .
+          </p>
+        )
+      }
+
+      {
+        groups.length > 0 && (
+          <div class="mt-8 space-y-8">
+            {groups.map((group) => (
+              <SpecialistGroupSection group={group} />
+            ))}
+          </div>
+        )
+      }
     </div>
-  </div>
+  </main>
 </Layout>

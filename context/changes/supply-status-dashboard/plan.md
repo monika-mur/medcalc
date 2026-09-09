@@ -495,21 +495,21 @@ Rollback is `git revert` — nothing is written that the previous code cannot re
 
 #### Automated
 
-- [ ] 2.1 Type checking passes: `npm run typecheck`
-- [ ] 2.2 Linting passes at zero errors and zero warnings: `npm run lint`
-- [ ] 2.3 Production build succeeds: `npm run build`
-- [ ] 2.4 No hardcoded palette colour in any component (grep returns nothing)
+- [x] 2.1 Type checking passes: `npm run typecheck`
+- [x] 2.2 Linting passes at zero errors and zero warnings: `npm run lint`
+- [x] 2.3 Production build succeeds: `npm run build`
+- [x] 2.4 No hardcoded palette colour in any component (grep returns nothing)
 
 #### Manual
 
-- [ ] 2.5 Groups appear in visit-date order; the visit-less specialist's group is last
-- [ ] 2.6 Moving a visit through the four positions drives the badge green → yellow → red → red, equality case included
-- [ ] 2.7 An early printed expiry shows the expiry date with the expiry reason
-- [ ] 2.8 Dosage 0 shows "Stopped"; zero projected quantity shows "Out of stock"
-- [ ] 2.9 No dosage row shows "No dosage recorded", sorts first, shows no date or quantity, links to `/medications`
-- [ ] 2.10 The yellow badge renders in amber-700 and `text-warning` resolves to a real class
-- [ ] 2.11 Usable at 320 px with no horizontal scrolling
-- [ ] 2.12 No `client:*` directive and no hydration script on this page
+- [x] 2.5 Groups appear in visit-date order; the visit-less specialist's group is last
+- [x] 2.6 Moving a visit through the four positions drives the badge green → yellow → red → red, equality case included
+- [x] 2.7 An early printed expiry shows the expiry date with the expiry reason
+- [x] 2.8 Dosage 0 shows "Stopped"; zero projected quantity shows "Out of stock"
+- [x] 2.9 No dosage row shows "No dosage recorded", sorts first, shows no date or quantity, links to `/medications`
+- [x] 2.10 The yellow badge renders in amber-700 and `text-warning` resolves to a real class
+- [x] 2.11 Usable at 320 px with no horizontal scrolling
+- [x] 2.12 No `client:*` directive and no hydration script on this page
 - [ ] 2.13 `CLAUDE.md` lines 65 and 94 amended in the same commit as the code
 
 ### Phase 3: The recount write path
