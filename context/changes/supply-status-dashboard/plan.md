@@ -397,7 +397,9 @@ Not a phase — the wrap-up after Phase 3's gate closes. Two of the four items e
 - **`roadmap.md`** — flip `### S-04: Supply-status dashboard` → `**Status:**` and the row at `:36` from `planning` to `done`, and add the `## Done` entry citing the PR. Do it from the PR, not afterwards; the same lesson records the roadmap losing its evidence column precisely because S-02 and S-03 had no PR to cite.
 - **`change.md`** — session state per phase, adaptations, and anything found that the plan did not predict.
 
-**Worth knowing while doing this**: CI runs only `lint` and `build` (`.github/workflows/ci.yml:20-21`). `npm run typecheck` is a named script but is **not** enforced — see the open follow-up `manage-doctor-visits/follow-ups/typecheck-in-ci.md`. So of this slice's three automated criteria, one never runs in CI and none of the three tests behaviour. A green PR check says the code compiles and lints, nothing more, which is the whole reason the first item above is not optional.
+**Worth knowing while doing this**: CI runs `lint`, `typecheck` and `build` (`.github/workflows/ci.yml:20-29`) and **no test of behaviour**. A green PR check says the code compiles, type-checks and lints, nothing more, which is the whole reason the first item above is not optional.
+
+> **Amended 2026-09-10 by `/10x-impl-review` (F2).** As written, this paragraph said CI ran "only `lint` and `build`" and that `npm run typecheck` was "not enforced — see the open follow-up `manage-doctor-visits/follow-ups/typecheck-in-ci.md`". That was true when the plan was authored and went stale before implementation finished: the typecheck gate landed in `668b675` on **2026-09-06**, and the cited follow-up has read `RESOLVED` since that date. The correction is recorded here rather than silently applied, because the paragraph's conclusion — a green check proves nothing about the arithmetic — is unchanged and is why close-out item C.1 exists.
 
 ### Success Criteria:
 

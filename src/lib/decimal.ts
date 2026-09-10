@@ -57,7 +57,18 @@ function factorFor(a: number, b: number): number {
  */
 export function floorDivide(a: number, b: number): number {
   const factor = factorFor(a, b);
-  return Math.floor(Math.round(a * factor) / Math.round(b * factor));
+  const scaledDivisor = Math.round(b * factor);
+  // `b > 0` is not the guarantee this needs. Scaling caps at `10^6`, so any
+  // `0 < b < 5e-7` rounds to a zero divisor and the division yields `Infinity`
+  // (the walk then never decrements and over-reports cover to the expiry date)
+  // or `NaN` (which reaches `addDays` and renders as `"0NaN-NaN-NaN"`). Both are
+  // silent. Throwing here matches `toEpochDay` in `@/lib/dates`: a value this
+  // module cannot represent is a programming error upstream, and stopping is
+  // better than a plausible wrong number on the screen the PRD guards hardest.
+  if (scaledDivisor === 0) {
+    throw new RangeError(`floorDivide needs a divisor representable at ${String(factor)}, received ${String(b)}`);
+  }
+  return Math.floor(Math.round(a * factor) / scaledDivisor);
 }
 
 /** Exact `a − b`, to the wider of the two operands' scales. */

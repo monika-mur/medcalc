@@ -1,7 +1,7 @@
 ---
 change_id: supply-status-dashboard
 title: Supply-status dashboard (S-04)
-status: implemented
+status: impl_reviewed
 created: 2026-09-06
 updated: 2026-09-10
 archived_at: null
@@ -160,6 +160,7 @@ supply-end date off the card and move the visit relative to it. The classifier
 only ever sees those two dates, so both routes walk identical branches.
 
 ---
+
 ### 2026-09-10 — Phase 3 closed
 
 The recount write path landed as `9afc946`. All ten Progress rows
@@ -249,6 +250,7 @@ distinct from the `medications.*` lines 3.10 looks for.
 predicted — verified, not edited.
 
 ---
+
 ### 2026-09-10 — Close-out: the slice landed through PR #34
 
 **C.1–C.4 are complete. S-04 is done and live in production.**
@@ -302,10 +304,17 @@ not an optimistic one.
 
 #### What CI actually proved
 
-`lint` and `build`, on Node 22. **Not** `npm run typecheck` — still unenforced,
-per the open follow-up `manage-doctor-visits/follow-ups/typecheck-in-ci.md` — and
-no test of behaviour, because this slice ships none. The green check means the
-code compiles and lints.
+`lint`, `typecheck` and `build`, on Node 22 — and **no test of behaviour**,
+because this slice ships none. The green check means the code compiles,
+type-checks and lints.
+
+**Corrected during the 2026-09-10 implementation review.** This section first
+read "not `npm run typecheck` — still unenforced, per the open follow-up
+`manage-doctor-visits/follow-ups/typecheck-in-ci.md`". That was stale: the gate
+landed in `668b675` on **2026-09-06**, four days before PR #34, and the follow-up
+it cited has read `RESOLVED` since. So PR #34's green check was stronger than the
+first version of this entry claimed. The substantive point is unchanged — CI runs
+nothing that would catch a wrong number.
 
 Everything that actually verified this slice was manual: the developer's browser
 walk of 3.5–3.10, the pgTAP 70/70 run, and a scratch harness that is not in the
@@ -354,3 +363,81 @@ Docker, the local Supabase stack (Studio on `:54323`) and `npm run dev` on
 `:4321` are all still up, holding the Phase 3 manual fixtures and the recount
 rows the walk produced. Nothing downstream needs them; the next `db:reset` from
 any worktree may take them.
+
+### 2026-09-10 — Implementation review, run after the merge
+
+`/10x-impl-review` was run **after** PR #34 merged and deployed, not before. The
+developer noticed the gate had been skipped in the chain and asked for it anyway.
+Report at `reviews/impl-review.md`; S-04 is no longer the only slice of five
+without one.
+
+**It was worth running.** Seven findings, two of which no automated gate could
+have caught — a green CI run (lint + typecheck + build), a full manual browser
+walk of 3.5–3.10 and a merged PR all passed over both, because both need
+circumstances this machine cannot produce.
+
+**F0a — CRITICAL, fixed.** `floorDivide` scales operands by `10^6`, so any
+divisor below `5e-7` rounds to **zero**. Its docstring promised only that
+"callers guarantee `b > 0`" — true at every call site, and the wrong guarantee.
+`dailyDosageField` bounds magnitude and not precision, so
+`{"daily_dosage": 0.0000004}` was accepted end to end, Postgres returned it as
+`4e-07`, `decimalPlaces` read exponential notation as 6 places, and the divisor
+became 0. With stock on hand that yields `covered = Infinity`, the walk never
+decrements and reports **"lasts until expiry"** — the over-report the PRD calls a
+product failure. With nothing on hand it yields `NaN`, which reached `addDays`
+and produced the literal string `"0NaN-NaN-NaN"`, rendered into
+`<time datetime=…>` on the card. Fixed at both ends: a `MIN_NONZERO_DOSAGE` floor
+on the schema, plus fail-loud `RangeError`s in `floorDivide` (zero scaled
+divisor) and `addDays` (non-finite offset), matching the discipline `toEpochDay`
+already set one function away. Verified that `0`, `0.25`, `0.000001` and `1000`
+are still accepted and `0.9 / 0.3` is still 3.
+
+**F0b — downgraded to WARNING, deferred.** A row written with `todayUtc()` and
+classified against the user's `today` is dated in the future relative to its own
+classification date whenever UTC has ticked over and the user's zone has not, so
+`doseInForce` skips it and a just-created medication reads "Not used / 0 on
+hand". The sub-agent rated it CRITICAL; that overstates it. It under-reports
+rather than over-reports, the window is 00:00–12:00 UTC for zones **west** of UTC
+only (Warsaw is never affected — the window was measured, not assumed, correcting
+an initial write-up that had the direction backwards), and the obvious patch —
+`max(today, written)` at the four mutation returns — fixes the write response
+while leaving the next page load wrong. Deferred whole to
+`follow-ups/timezone-classification.md` rather than half-fixed under review
+pressure: which date classifies a row is a design decision that touches
+`CLAUDE.md` → _Dates_, and that section has a documented history of a bug caused
+by getting it wrong.
+
+**F1 — fixed.** The refill and create paths wrote `quantity_delta` raw while
+Phase 3 clamped `counted`, so a 7-decimal refill entered the ledger and the
+**next** correction's `subtractExact` disagreed with Postgres. Confirmed against
+the live database: `(1.000001 - 2.0000005) = -1` is false. `clampScale` now
+applied at both sites, so all three write paths are scale-safe.
+
+**F2 — fixed, and it corrects this file.** Three documents claimed CI does not
+enforce `typecheck`. It has since `668b675` on 2026-09-06 — four days before
+PR #34 — and the follow-up they cited has read `RESOLVED` since. Corrected in
+`follow-ups/supply-engine-tests.md` and here; `plan.md` carries a visible
+amendment note rather than a silent rewrite, at the developer's direction.
+
+**F3 — fixed.** `quantity_on_hand` summed the ledger with raw `+`. Nothing
+renders it, but it is public on `MedicationView`, so the drift would have been
+inherited rather than introduced. Now reduces with `addExact`.
+
+**F4, F5 — recorded.** The engine is `O(breakpoints × events)`, not
+`O(breakpoints)` as the plan states (harmless at this volume; the NFR conclusion
+survives because iterations are bounded by breakpoints and never by days), and
+`addDays` rejects calendrically non-existent dates like `2026-02-30`, which is
+stricter than the plan specified and deliberate. Both noted in
+`follow-ups/supply-engine-tests.md` so S-05 inherits accurate information and
+neither guard is removed as accidental.
+
+**What passed.** Plan Adherence is a clean MATCH across all three phases — no
+missing items, no scope creep in `src/`, and the three assertions the plan warned
+would be silently "corrected" are all intact. All eight scope guardrails hold.
+Every automated criterion was re-run independently during the review.
+
+**The ordering lesson.** Every finding above was found by reading the code, and
+none by running it. The review belongs before the merge — not because these were
+unfixable afterwards (rollback is `git revert`, and five were fixed in place),
+but because F0a shipped a path that over-reports supply, which is the one failure
+this product's PRD says it exists to prevent.

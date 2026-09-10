@@ -138,6 +138,15 @@ function fromEpochDay(epochDay: number): string {
 
 /** `date` shifted by `days`, which may be negative. */
 export function addDays(date: string, days: number): string {
+  // The date argument is validated by `toEpochDay`; the offset was not, which
+  // left the module's stated purpose half-served. A `NaN` offset — reachable
+  // when a caller derives one from a division this module does not own — flows
+  // through `fromEpochDay` and returns the string `"0NaN-NaN-NaN"`, which then
+  // compares lexicographically against real dates and renders into a `<time>`
+  // element. Same reasoning as `toEpochDay`: stop rather than propagate.
+  if (!Number.isFinite(days)) {
+    throw new RangeError(`Expected a finite day offset, received ${String(days)}`);
+  }
   return fromEpochDay(toEpochDay(date) + days);
 }
 
