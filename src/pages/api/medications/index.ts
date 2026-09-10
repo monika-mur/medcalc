@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { json, jsonError, readJsonBody, zodFieldErrors } from "@/lib/api/json";
+import { resolveTodayForUser } from "@/lib/dates";
 import { createMedication, listMedications } from "@/lib/db/medications";
 import { createClient } from "@/lib/supabase";
 import { medicationCreateSchema } from "@/lib/validation/medication";
@@ -15,7 +16,7 @@ export const GET: APIRoute = async (context) => {
 
   // Archived rows come back too — the island owns the "Show archived" toggle,
   // so the filtering decision is not the route's to make.
-  const result = await listMedications(supabase);
+  const result = await listMedications(supabase, resolveTodayForUser(context.locals.user.user_metadata));
   if (!result.ok) {
     return jsonError(500, "Could not load medications");
   }
@@ -48,7 +49,7 @@ export const POST: APIRoute = async (context) => {
   // Only the parsed output is forwarded — never `body.data`. See the update
   // payload rule in `@/lib/db/medications`; the route is the other place that
   // rule can be broken.
-  const result = await createMedication(supabase, parsed.data);
+  const result = await createMedication(supabase, parsed.data, resolveTodayForUser(context.locals.user.user_metadata));
   if (!result.ok) {
     if (result.error === "no_specialist") {
       // 400 with a field error, not 409: the reference is unresolvable and the

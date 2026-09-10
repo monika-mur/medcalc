@@ -62,7 +62,7 @@ Wrangler reads `.dev.vars` (not `.env`) for runtime secrets during `npm run dev`
 
 - **White/slate surfaces with green as a rationed accent.** Green means primary action, active, or healthy; red means destructive or error; everything else is neutral. A screen where green is a background is a screen where green has stopped meaning anything.
 - **Colour comes from the `:root` tokens in `src/styles/global.css`**, because `components.json` sets `cssVariables: true`. Use `bg-primary` / `text-primary` / `border-input`; do not hardcode `green-*` in a component. Needing to edit a file in `src/components/ui/` to change a colour means the token is wrong.
-- **`green-700` for anything with a letter in it, `green-600` for rings and borders.** `green-600` on white is 3.26:1 — it passes the 3:1 threshold for non-text UI and fails the 4.5:1 threshold for text. Never use `green-500` for text at any size.
+- **The 700 shade for anything with a letter in it, the 600 for rings and borders.** `green-600` on white is 3.26:1 — it passes the 3:1 threshold for non-text UI and fails the 4.5:1 threshold for text; `green-700` is 5.02:1 and passes. Never use `green-500` for text at any size. `--warning` (S-04's yellow supply badge) follows the same rule and is `amber-700` at 5.02:1: `amber-500` is **2.15:1** and fails even the non-text threshold, and `amber-600` is 3.19:1 — rings and borders only. Both tokens therefore read deeper than the eye expects (forest green, burnt orange); that is the cost of legible text, not a mistake to correct.
 - **`--input` is deliberately darker than `--border`** (slate-400 vs slate-200). An input's border is a UI-component boundary that must be identifiable; a card edge and the topbar rule are decorative and exempt under WCAG 1.4.11. Do not "fix" the divergence by re-unifying them.
 - **Only `:root` is live.** The `.dark` block in `global.css` is dead — nothing sets `class="dark"` and there is no dark mode. Leave it alone rather than tuning it; a slice that wants dark mode starts by populating it.
 
@@ -91,7 +91,7 @@ Wrangler reads `.dev.vars` (not `.env`) for runtime secrets during `npm run dev`
 - **The liquid sub-type is nullable columns on `medications`** (`container_capacity`, `estimated_daily_consumption`, `post_opening_expiry_days`, `opened_on`) guarded by a CHECK, so creating one is a single insert. A second sub-type is the signal to revisit that — not a reason to add nullable columns for it.
 - **`daily_dosage = 0` means "stopped, keep the history"** and is distinct from archival, which hides the medication. A medication with no `dosage_changes` rows reads as dosage 0; one with no `supply_events` rows reads as quantity 0. Both are legal states, which is what makes a partial multi-statement create harmless.
 - **Consequently the supply-end date is undefined, not computed, when dosage is 0** — never divide by it. A `5 → 0 → 5` series is three segments with zero consumption in the middle, not a gap to skip.
-- **Current-state views** (latest dosage + current balance) are to be created once, at first need in S-04, and reused — not reimplemented per slice.
+- **There is no current-state view, and the supply calculation lives in `src/lib/supply.ts` instead.** S-04 was where a view for latest-dosage-plus-current-balance was to be created; it was not, deliberately. The ledger sum is not the quantity on hand — there is no consumption event type, so the figure has to be projected by walking the ledger against the dosage series — and F-01 declined to put that arithmetic in SQL because "duplicating it would create a second implementation of the PRD's guarded calculation". A view would be that second implementation. `computeSupply` is the single one; a read-only view remains available later if a read pattern demands one, but it must not re-derive supply.
 - **`.upsert()` does not work on `dosage_changes` or `supply_events`.** PostgREST compiles upsert to `INSERT … ON CONFLICT DO UPDATE`, and neither table has an UPDATE policy, so RLS refuses the conflict branch and the call fails rather than replacing the row. Replacing today's dosage is an explicit DELETE-then-INSERT (`src/lib/db/medications.ts` → `setDosage`), and because that window can destroy the previous value the DELETE chains `.select()` so the removed row can be re-inserted when the replacement INSERT fails.
 - **`dosage_changes.effective_date` and `supply_events.occurred_on` are the columns an RLS policy compares against `current_date`**, so both are resolved in UTC and the server derives them — no route or island may send one. Why UTC, and why that is not the rule everywhere, is under _Dates_.
 
@@ -111,44 +111,53 @@ Wrangler reads `.dev.vars` (not `.env`) for runtime secrets during `npm run dev`
 
 <!-- BEGIN @przeprogramowani/10x-cli -->
 
-## 10xDevs AI Toolkit - Module 2, Lesson 3
+## 10xDevs AI Toolkit - Module 2, Lesson 4
 
-Review AI-generated code before merge with the **implementation review chain**:
+Prepare for a harder implementation stream with the **research-backed planning chain**:
 
 ```
-/10x-implement -> /10x-impl-review -> triage -> (/10x-lesson | fix | skip | disagree)
+internal research (/10x-research) + external research (exa.ai, Context7) -> /10x-plan -> /10x-implement -> success
 ```
 
-`/10x-impl-review` is the lesson focus. Review is a quality gate, not an instruction to fix every finding.
+The lesson focus is distinguishing internal from external research and using evidence to back planning decisions.
 
 ### Task Router - Where to start
 
-| Skill                          | Use it when                                                                                                                                                                                                                             |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Code review (lesson focus)** |                                                                                                                                                                                                                                         |
-| `/10x-impl-review <change-id>` | You have implemented code and want a structured review before merge. The skill checks plan adherence, scope discipline, safety and quality, architecture, pattern consistency, and success criteria, then presents findings for triage. |
-| **Recurring lesson outcome**   |                                                                                                                                                                                                                                         |
-| `/10x-lesson`                  | A finding reveals a recurring project rule or agent failure pattern. Record it in `context/foundation/lessons.md` instead of treating it as a one-off note.                                                                             |
+| Skill                                                            | Use it when                                                                                                                                                                                                                                    |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Internal research (lesson focus)**                             |                                                                                                                                                                                                                                                |
+| `/10x-research <change-id>`                                      | You need evidence from the existing codebase — patterns, conventions, integration points, or existing implementations. Runs parallel sub-agents over the repo and writes structured findings to `research.md`.                                 |
+| **External research (lesson focus)**                             |                                                                                                                                                                                                                                                |
+| exa.ai                                                           | You need AI-native web search for library comparisons, best practices, or ecosystem context that the codebase cannot answer.                                                                                                                   |
+| Context7 (`resolve-library-id` → `get-library-docs`)             | You need live, current documentation for a specific library or framework. Resolves a library ID first, then fetches relevant doc pages.                                                                                                        |
+| **Framing spare wheel**                                          |                                                                                                                                                                                                                                                |
+| `/10x-frame <change-id>`                                         | The plan won't converge, the plan doesn't deliver expected results, or persistent drift keeps breaking the implementation. Use as an escape hatch on a separate problem (demonstrated on Space Explorers example), not as pre-research ritual. |
+| **Planning and execution**                                       |                                                                                                                                                                                                                                                |
+| `/10x-plan <change-id>` / `/10x-implement <change-id> phase <n>` | Use the same planning and execution chain from Lesson 2, now with upstream research evidence feeding the plan.                                                                                                                                 |
 
-### Triage discipline
+### Research discipline
 
-- Severity says how bad the finding is. Impact says how much the decision matters now.
-- Valid outcomes: fix now, fix differently, skip, accept as risk, record as recurring rule (`/10x-lesson`), disagree.
-- Fix critical findings. Do not burn hours on low-impact observations just because the agent found them.
-- Conscious skipping of low-impact findings is a valid review outcome, not negligence.
-- If you disagree with a finding, record why. Wrong agent reasoning is also signal.
+- Internal research (`/10x-research`) answers "what does our codebase already do?" — patterns, schemas, conventions, integration points.
+- External research (exa.ai, Context7) answers "what should we do?" — library capabilities, API docs, ecosystem best practices.
+- Combine both as evidence-backed input to `/10x-plan`. A plan without research evidence on a non-trivial stream is a guess.
+- Agent-friendly docs (`llms.txt`, markdown-for-agents, `/md` endpoints) are a quality signal for library selection — libraries that publish agent-readable docs integrate faster.
 
-### Review boundaries
+### `/10x-frame` as spare wheel
 
-- This lesson reviews implemented code. It does not create the plan, execute new phases, or teach CI review.
-- Testing strategy and quality gates are introduced in Module 3.
-- Do not use `/10x-contract` as a triage outcome in this lesson.
+Three triggers for reaching for `/10x-frame`:
+
+1. The plan won't converge — research keeps opening more questions instead of narrowing to a contract.
+2. The plan doesn't deliver — implementation repeatedly fails to meet success criteria.
+3. Persistent drift — the implementation keeps diverging from the plan in ways that suggest the problem was mis-framed.
+
+Demonstrated on a Space Explorers example, not the SRS path. It is an escape hatch, not a mandatory step.
 
 ### Paths used by this lesson
 
-- `context/changes/<change-id>/plan.md` - expected implementation contract
-- `context/changes/<change-id>/reviews/` - review output
-- `context/foundation/lessons.md` - recurring lessons
+- `context/changes/<change-id>/research.md` - internal research output
+- `context/changes/<change-id>/frame.md` - framing output when needed
+- `context/changes/<change-id>/plan.md` - evidence-backed implementation contract
+- `context/foundation/lessons.md` - recurring rules and pitfalls
 
 Skills must not write to `context/archive/`. Archived changes are immutable; if a resolved target path starts with `context/archive/`, abort with: "This change is archived. Open a new change with `/10x-new` instead."
 

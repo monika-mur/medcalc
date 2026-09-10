@@ -2,7 +2,7 @@
 import Topbar from "@/components/Topbar.astro";
 import VisitsManager from "@/components/visits/VisitsManager";
 import Layout from "@/layouts/Layout.astro";
-import { resolveToday } from "@/lib/dates";
+import { resolveTodayForUser } from "@/lib/dates";
 import { listSpecialists, type SpecialistWithUsage } from "@/lib/db/specialists";
 import { listVisits, type Visit } from "@/lib/db/visits";
 import { createClient } from "@/lib/supabase";
@@ -31,13 +31,10 @@ if (supabase) {
   }
 }
 
-// `user_metadata` is `Record<string, any>`, so this is read as `unknown` and
-// narrowed rather than handed to `resolveToday` as an `any`. The narrow is the
-// same hostile-input argument the resolver's own `try`/`catch` makes: the zone
-// is validated when signup writes it, but `auth.updateUser({ data })` can
-// replace it afterwards.
-const storedTimeZone: unknown = Astro.locals.user?.user_metadata.timezone;
-const today = resolveToday(typeof storedTimeZone === "string" ? storedTimeZone : undefined);
+// The narrow lives in `resolveTodayForUser` rather than here: S-04 needs the
+// same three lines in eight more places, and written out nine times one of them
+// eventually passes the `any` through.
+const today = resolveTodayForUser(Astro.locals.user?.user_metadata);
 ---
 
 <Layout title="Visits">

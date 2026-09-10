@@ -1,0 +1,119 @@
+---
+import type { CardState } from "@/lib/dashboard";
+import type { MedicationView } from "@/lib/db/medications";
+
+interface Props {
+  medication: MedicationView;
+  state: CardState;
+}
+
+const { medication, state } = Astro.props;
+
+/*
+  The word carries the status; colour is the redundant cue, never the only one —
+  the same contract `MedicationsManager`'s `STATUS_LABEL` keeps, and the same
+  reason `Topbar.astro:13-15` pairs `aria-current` with an underline.
+*/
+const STATE_LABEL: Record<CardState, string> = {
+  no_dosage: "No dosage recorded",
+  out_of_stock: "Out of stock",
+  red: "Order now",
+  yellow: "Tight",
+  green: "Enough",
+  no_visit: "No visit scheduled",
+  stopped: "Stopped",
+};
+
+/*
+  Coloured text, not a filled pill. This screen renders one badge per medication,
+  and `CLAUDE.md` -> _Design conventions_ is explicit that a screen where green
+  is a background is a screen where green has stopped meaning anything. A badge
+  needing more weight gets size or font weight, never a background.
+
+  Every value is a `:root` token — `text-warning` is the amber one S-04 added,
+  whose shade is argued in `global.css`. Never a hardcoded palette class here.
+*/
+const STATE_CLASS: Record<CardState, string> = {
+  no_dosage: "text-destructive",
+  out_of_stock: "text-destructive",
+  red: "text-destructive",
+  yellow: "text-warning",
+  green: "text-primary",
+  no_visit: "text-muted-foreground",
+  stopped: "text-muted-foreground",
+};
+
+/*
+  A `no_dosage` card shows no supply-end date and no quantity, because both would
+  be fabrications: there is no `dosage_changes` row, so nothing about this
+  medication's supply can be calculated. It is the only card that tells the user
+  to do something to the app rather than about their medication.
+*/
+const isUnknowable = state === "no_dosage";
+
+const reason = isUnknowable
+  ? "No daily dosage has been recorded, so supply cannot be calculated."
+  : state === "stopped"
+    ? "Dosage is set to 0, so nothing is being consumed."
+    : medication.supply_end_reason === "expiry"
+      ? "Limited by the printed expiry date, not by how fast it is used."
+      : medication.supply_end_date === null
+        ? "No supply has ever been recorded."
+        : "Based on the recorded doses and refills.";
+---
+
+<li class="border-border bg-card rounded-xl border p-4 shadow-sm">
+  <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+    <div class="min-w-0">
+      <p class="text-foreground font-medium break-words">{medication.name}</p>
+
+      {
+        isUnknowable ? null : (
+          <p class="text-muted-foreground mt-1 text-sm">
+            {medication.supply_end_date ? (
+              <>
+                Lasts until{" "}
+                {/* Rendered as the stored `YYYY-MM-DD` string. Formatting it
+                    would mean parsing it into a `Date`, which is how this
+                    screen would acquire an off-by-one-day bug. */}
+                <time datetime={medication.supply_end_date} class="text-foreground font-medium">
+                  {medication.supply_end_date}
+                </time>
+              </>
+            ) : (
+              "No supply-end date"
+            )}
+          </p>
+        )
+      }
+
+      <p class="text-muted-foreground mt-1 text-sm">{reason}</p>
+
+      {
+        isUnknowable ? (
+          <p class="mt-2 text-sm">
+            <a href="/medications" class="text-primary rounded-sm font-medium hover:underline">
+              Record a dosage
+            </a>
+          </p>
+        ) : (
+          <dl class="text-muted-foreground mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+            <div class="flex gap-1">
+              <dt>On hand:</dt>
+              <dd class="text-foreground">{medication.projected_quantity}</dd>
+            </div>
+            <div class="flex gap-1">
+              <dt>Dosage:</dt>
+              <dd class="text-foreground">{medication.current_dosage} / day</dd>
+            </div>
+          </dl>
+        )
+      }
+    </div>
+
+    <p class="flex flex-wrap items-center gap-2 text-sm font-medium">
+      <span class:list={[STATE_CLASS[state]]}>{STATE_LABEL[state]}</span>
+      {medication.is_expired ? <span class="text-destructive">Expired</span> : null}
+    </p>
+  </div>
+</li>

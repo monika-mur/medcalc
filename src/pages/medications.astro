@@ -2,6 +2,7 @@
 import MedicationsManager from "@/components/medications/MedicationsManager";
 import Topbar from "@/components/Topbar.astro";
 import Layout from "@/layouts/Layout.astro";
+import { resolveTodayForUser } from "@/lib/dates";
 import { listMedications, type MedicationView } from "@/lib/db/medications";
 import { listSpecialists, type SpecialistWithUsage } from "@/lib/db/specialists";
 import { createClient } from "@/lib/supabase";
@@ -17,7 +18,7 @@ let loadFailed = false;
 
 if (supabase) {
   const [medicationResult, specialistResult] = await Promise.all([
-    listMedications(supabase),
+    listMedications(supabase, resolveTodayForUser(Astro.locals.user?.user_metadata)),
     listSpecialists(supabase),
   ]);
 

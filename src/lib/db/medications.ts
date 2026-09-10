@@ -1,6 +1,8 @@
 import type { Tables } from "@/db/database.types";
 import { resolveToday } from "@/lib/dates";
+import { clampScale, subtractExact } from "@/lib/decimal";
 import type { SupabaseClient } from "@/lib/supabase";
+import { computeSupply, doseInForce } from "@/lib/supply";
 import type { MedicationCreateInput, MedicationDetailsInput, SupplyInput } from "@/lib/validation/medication";
 
 export type Medication = Tables<"medications">;
@@ -9,22 +11,47 @@ export type Medication = Tables<"medications">;
  * Derived, in this precedence order. Archival wins because it is the user's
  * explicit "hide this"; a stopped medication is reported as stopped rather than
  * as empty, because the intent is the more informative fact.
+ *
+ * `no_dosage` and `not_used` are mutually exclusive, so their order documents
+ * intent rather than resolving a clash. They are separate states because a
+ * dosage of 0 means two different things: the user set it — the schema's
+ * first-class "I have stopped taking this"
+ * (`20260813185255_domain_schema.sql:126-129`) — or no `dosage_changes` row
+ * exists at all, which folds to 0 as well. The second is reachable, because
+ * `createMedication` logs a failed dosage insert and still reports success.
+ * Collapsed into one label it reads as a deliberate choice while the app has in
+ * fact lost the user's data, so the test is the row count, never the value.
+ *
+ * **Handed to S-05**: a medication whose dosage rows are all future-dated has a
+ * non-zero count and folds to 0 today, so it lands in `not_used` / "Stopped".
+ * No S-04 surface can write that row, so it is unreachable here — but S-05's
+ * whole purpose is writing one, and "Stopped" is the wrong word for "starts
+ * next Monday". S-05 splits it.
  */
-export type MedicationStatus = "archived" | "not_used" | "out_of_stock" | "active";
+export type MedicationStatus = "archived" | "no_dosage" | "not_used" | "out_of_stock" | "active";
 
 /**
- * A medication plus the two numbers that are NOT columns on it. Dosage lives
- * only in `dosage_changes` and quantity only in `supply_events` deltas
+ * A medication plus the numbers that are NOT columns on it. Dosage lives only
+ * in `dosage_changes` and quantity only in `supply_events` deltas
  * (`CLAUDE.md` -> _Domain schema_); the absence of a cached copy is what makes
  * drift impossible, so they are folded on read rather than stored.
  *
+ * `quantity_on_hand` is the raw ledger sum and keeps that meaning — the create
+ * and refill paths still reason in ledger terms. It is **not** what the user
+ * has: there is no consumption event type, so the sum decays for nobody.
+ * `projected_quantity` is the figure to display, and every read of "on hand" on
+ * a screen means that one.
+ *
  * `is_expired` is reported beside `status`, not folded into it: a medication
- * can be expired AND in any of the four states.
+ * can be expired AND in any of the five states.
  */
 export interface MedicationView extends Medication {
   specialist: { id: string; name: string; specialty: string };
   current_dosage: number;
   quantity_on_hand: number;
+  supply_end_date: string | null;
+  supply_end_reason: "consumption" | "expiry" | null;
+  projected_quantity: number;
   status: MedicationStatus;
   is_expired: boolean;
 }
@@ -65,6 +92,12 @@ function logDbError(operation: string, error: { code: string; message: string })
  * Today, in UTC, resolved on the server. Never in the browser, and never sent
  * by a caller.
  *
+ * **Used for written dates only** — `effective_date` and `occurred_on`, plus
+ * the projection stamped onto a `recount` row, which has to be as of the date
+ * that row carries. Classification moved to the user's own zone in S-04 and
+ * arrives as the `today` argument every exported function now takes; the two
+ * may differ by a calendar day, which is the point.
+ *
  * `dosage_changes_delete_uncommitted_own` compares `effective_date` against
  * Postgres `current_date`, which is UTC on Supabase. A date taken from the
  * visitor's clock disagrees with it for part of every day: at 22:00 in UTC-8 a
@@ -93,7 +126,7 @@ function todayUtc(): string {
  * `listSpecialists` relies on in the other direction.
  */
 const MEDICATION_SELECT =
-  "*, specialists(id, name, specialty), dosage_changes(daily_dosage, effective_date), supply_events(quantity_delta)";
+  "*, specialists(id, name, specialty), dosage_changes(daily_dosage, effective_date), supply_events(quantity_delta, occurred_on)";
 
 /**
  * No function here filters by `user_id`. RLS does that, and a redundant filter
@@ -103,49 +136,51 @@ const MEDICATION_SELECT =
 interface MedicationRow extends Medication {
   specialists: { id: string; name: string; specialty: string } | null;
   dosage_changes: { daily_dosage: number; effective_date: string }[];
-  supply_events: { quantity_delta: number }[];
+  supply_events: { quantity_delta: number; occurred_on: string }[];
 }
 
 /**
- * The dosage in force today: the greatest `effective_date` that is not in the
- * future. Dates are `YYYY-MM-DD`, so lexicographic comparison IS chronological
- * comparison and no parsing is needed.
- *
- * Rows dated after today are skipped rather than treated as current. Nothing in
- * this slice writes one, but the schema and the relaxed DELETE policy both
- * permit them and S-05 will, so the fold must already be right when they
- * appear.
- *
- * No row at all reads as 0 — a legal state, not missing data.
+ * `dosageCount` rather than `currentDosage === 0`, because those are different
+ * questions — see `MedicationStatus`. Out-of-stock reads the **projected**
+ * quantity: the ledger sum never decays, so testing it would report a
+ * medication refilled a year ago at one a day as still in stock, which is the
+ * "you have enough" over-report the PRD's guardrail forbids.
  */
-function foldDosage(rows: { daily_dosage: number; effective_date: string }[], today: string): number {
-  let current: { daily_dosage: number; effective_date: string } | null = null;
-  for (const row of rows) {
-    if (row.effective_date > today) continue;
-    if (!current || row.effective_date > current.effective_date) {
-      current = row;
-    }
-  }
-  return current ? current.daily_dosage : 0;
-}
-
-function deriveStatus(archivedAt: string | null, currentDosage: number, quantityOnHand: number): MedicationStatus {
+function deriveStatus(
+  archivedAt: string | null,
+  dosageCount: number,
+  currentDosage: number,
+  projectedQuantity: number,
+): MedicationStatus {
   if (archivedAt !== null) return "archived";
+  if (dosageCount === 0) return "no_dosage";
   if (currentDosage === 0) return "not_used";
-  if (quantityOnHand <= 0) return "out_of_stock";
+  if (projectedQuantity <= 0) return "out_of_stock";
   return "active";
 }
 
 /**
- * The fold is the S-04 replacement point. When the current-state views land,
- * this arithmetic moves into SQL and `MedicationView` stops being computed
- * here — the exported signatures do not change.
+ * Folds one row against the supply engine. `today` is the **user's** date, not
+ * UTC: this row replaces one the page rendered in the user's zone, and a
+ * UTC-classified row landing in that list is how the two disagree about the
+ * same medication.
+ *
+ * This used to be named the S-04 replacement point, on the assumption the
+ * arithmetic would move into a Postgres view. It did not, and deliberately —
+ * `src/lib/supply.ts` is the single implementation, for the reason F-01 gave
+ * for not writing it in SQL in the first place.
  */
 function toView(row: MedicationRow, today: string): MedicationView {
   const { specialists, dosage_changes, supply_events, ...medication } = row;
 
-  const currentDosage = foldDosage(dosage_changes, today);
+  const currentDosage = doseInForce(dosage_changes, today);
   const quantityOnHand = supply_events.reduce((sum, event) => sum + event.quantity_delta, 0);
+  const supply = computeSupply({
+    events: supply_events,
+    dosages: dosage_changes,
+    expiryDate: medication.expiry_date,
+    today,
+  });
 
   return {
     ...medication,
@@ -155,11 +190,13 @@ function toView(row: MedicationRow, today: string): MedicationView {
     specialist: specialists ?? { id: medication.specialist_id, name: "Unknown specialist", specialty: "" },
     current_dosage: currentDosage,
     quantity_on_hand: quantityOnHand,
-    status: deriveStatus(medication.archived_at, currentDosage, quantityOnHand),
-    // Compared against UTC today, which can differ by a day from the user's own
-    // date near midnight. Immaterial for a date printed on a box, and the
-    // user-zone resolution this would otherwise want is S-03's `resolveToday`,
-    // which this slice deliberately does not import.
+    supply_end_date: supply.supplyEndDate,
+    supply_end_reason: supply.supplyEndReason,
+    projected_quantity: supply.projectedQuantity,
+    status: deriveStatus(medication.archived_at, dosage_changes.length, currentDosage, supply.projectedQuantity),
+    // Resolved in the user's own zone, so a box expiring today reads as expired
+    // on the day the user calls today. S-02 compared against UTC here and
+    // apologised for it; S-04 threads the user's date in instead.
     is_expired: medication.expiry_date < today,
   };
 }
@@ -171,8 +208,14 @@ function toView(row: MedicationRow, today: string): MedicationView {
  * Fetching archived rows alongside active ones bypasses
  * `medications_user_id_active_idx`, which is partial on `archived_at is null`.
  * Deliberate, and irrelevant at the PRD's volume.
+ *
+ * `today` is supplied by the caller and is the **user's** date. Every exported
+ * function here takes it last, because every one of them returns a
+ * `MedicationView` and a view classified in the wrong zone is a row that
+ * disagrees with the list it lands in. Resolve it once per request with
+ * `resolveTodayForUser` — never per row, and never in an island.
  */
-export async function listMedications(client: SupabaseClient): Promise<Result<MedicationView[]>> {
+export async function listMedications(client: SupabaseClient, today: string): Promise<Result<MedicationView[]>> {
   const { data, error } = await client.from("medications").select(MEDICATION_SELECT).order("name");
 
   if (error) {
@@ -180,7 +223,6 @@ export async function listMedications(client: SupabaseClient): Promise<Result<Me
     return { ok: false, error: "unknown" };
   }
 
-  const today = todayUtc();
   return { ok: true, data: data.map((row) => toView(row, today)) };
 }
 
@@ -190,7 +232,7 @@ export async function listMedications(client: SupabaseClient): Promise<Result<Me
  * `.single()` turns "no such row" into a PostgREST error and this needs it as a
  * domain outcome.
  */
-async function readMedication(client: SupabaseClient, id: string): Promise<Result<MedicationView>> {
+async function readRow(client: SupabaseClient, id: string): Promise<Result<MedicationRow>> {
   const { data, error } = await client.from("medications").select(MEDICATION_SELECT).eq("id", id).limit(1);
 
   if (error) {
@@ -202,7 +244,12 @@ async function readMedication(client: SupabaseClient, id: string): Promise<Resul
   if (!row) {
     return { ok: false, error: "not_found" };
   }
-  return { ok: true, data: toView(row, todayUtc()) };
+  return { ok: true, data: row };
+}
+
+async function readMedication(client: SupabaseClient, id: string, today: string): Promise<Result<MedicationView>> {
+  const row = await readRow(client, id);
+  return row.ok ? { ok: true, data: toView(row.data, today) } : row;
 }
 
 /**
@@ -224,6 +271,7 @@ async function readMedication(client: SupabaseClient, id: string): Promise<Resul
 export async function createMedication(
   client: SupabaseClient,
   input: MedicationCreateInput,
+  today: string,
 ): Promise<Result<MedicationView>> {
   const { data: medication, error } = await client
     .from("medications")
@@ -239,11 +287,13 @@ export async function createMedication(
     return { ok: false, error: "unknown" };
   }
 
-  const today = todayUtc();
+  // The written dates are UTC, not the user's `today`: an RLS policy compares
+  // both columns against Postgres `current_date`. See `todayUtc`.
+  const written = todayUtc();
 
   const { error: dosageError } = await client
     .from("dosage_changes")
-    .insert({ medication_id: medication.id, daily_dosage: input.daily_dosage, effective_date: today });
+    .insert({ medication_id: medication.id, daily_dosage: input.daily_dosage, effective_date: written });
   if (dosageError) {
     logDbError("create.dosage", dosageError);
   }
@@ -257,14 +307,14 @@ export async function createMedication(
       medication_id: medication.id,
       event_type: "refill",
       quantity_delta: input.quantity,
-      occurred_on: today,
+      occurred_on: written,
     });
     if (supplyError) {
       logDbError("create.supply", supplyError);
     }
   }
 
-  return readMedication(client, medication.id);
+  return readMedication(client, medication.id, today);
 }
 
 /**
@@ -284,6 +334,7 @@ export async function updateMedicationDetails(
   client: SupabaseClient,
   id: string,
   input: MedicationDetailsInput,
+  today: string,
 ): Promise<Result<MedicationView>> {
   const { data, error } = await client
     .from("medications")
@@ -307,7 +358,7 @@ export async function updateMedicationDetails(
   if (data.length === 0) {
     return { ok: false, error: "not_found" };
   }
-  return readMedication(client, id);
+  return readMedication(client, id, today);
 }
 
 /**
@@ -336,14 +387,18 @@ export async function setDosage(
   client: SupabaseClient,
   id: string,
   dailyDosage: number,
+  today: string,
 ): Promise<Result<MedicationView>> {
-  const today = todayUtc();
+  // `effective_date` is policy-compared, so it is UTC regardless of the user's
+  // zone — including the `.eq()` the DELETE matches on, which has to name the
+  // same day the INSERT is about to write.
+  const written = todayUtc();
 
   const { data: removed, error: deleteError } = await client
     .from("dosage_changes")
     .delete()
     .eq("medication_id", id)
-    .eq("effective_date", today)
+    .eq("effective_date", written)
     .select("daily_dosage");
 
   if (deleteError) {
@@ -353,7 +408,7 @@ export async function setDosage(
 
   const { error: insertError } = await client
     .from("dosage_changes")
-    .insert({ medication_id: id, daily_dosage: dailyDosage, effective_date: today });
+    .insert({ medication_id: id, daily_dosage: dailyDosage, effective_date: written });
 
   if (insertError) {
     // An unresolvable `(medication_id, user_id)` means there is no such
@@ -370,7 +425,7 @@ export async function setDosage(
     if (previous) {
       const { error: restoreError } = await client
         .from("dosage_changes")
-        .insert({ medication_id: id, daily_dosage: previous.daily_dosage, effective_date: today });
+        .insert({ medication_id: id, daily_dosage: previous.daily_dosage, effective_date: written });
       if (restoreError) {
         logDbError("setDosage.restore", restoreError);
       }
@@ -379,35 +434,36 @@ export async function setDosage(
     return { ok: false, error: missing ? "not_found" : "unknown" };
   }
 
-  return readMedication(client, id);
+  return readMedication(client, id, today);
 }
 
 /**
- * A refill appends what was added. A correction states the counted total, so
- * the module reads the ledger sum and appends the difference as an
- * `adjustment` — `recount` is not used here, because an honest recount needs
- * the `projected_quantity` only S-04's consumption engine can supply.
+ * A refill appends what was added. A correction states the counted total, and
+ * is recorded as a `recount` carrying both figures — what was counted and what
+ * the engine projected — so the discrepancy between them is a fact in the
+ * ledger rather than a number folded away.
  *
- * `counted_quantity` and `projected_quantity` are left unset:
- * `supply_events_recount_fields_match_type` requires both to be NULL on a
- * non-recount.
- *
- * The correction reads before it writes, so two tabs correcting at once race
- * and the later write wins on a stale base. Accepted at this volume and
- * single-user scope; S-04's `recount` is the structural fix, since it records
- * the counted figure itself rather than a delta derived from a read.
+ * S-02 wrote this branch as an `adjustment` derived from the ledger sum,
+ * because "an honest recount needs the `projected_quantity` only S-04's
+ * consumption engine can supply". It supplies it now. That also removes the
+ * stale-base race S-02 documented: the projection comes from the same read that
+ * produces the row, and `supply_events_recount_delta_is_discrepancy` rejects
+ * any row where the three figures disagree.
  */
 export async function recordSupply(
   client: SupabaseClient,
   id: string,
   input: SupplyInput,
+  today: string,
 ): Promise<Result<MedicationView>> {
-  const today = todayUtc();
+  // `occurred_on` is policy-compared, so it is UTC; `today` classifies the view
+  // that goes back to the page. The two may differ by a calendar day.
+  const written = todayUtc();
 
   if (input.kind === "refill") {
     const { error } = await client
       .from("supply_events")
-      .insert({ medication_id: id, event_type: "refill", quantity_delta: input.amount, occurred_on: today });
+      .insert({ medication_id: id, event_type: "refill", quantity_delta: input.amount, occurred_on: written });
 
     if (error) {
       if (error.code === FK_VIOLATION) {
@@ -416,25 +472,60 @@ export async function recordSupply(
       logDbError("recordSupply.refill", error);
       return { ok: false, error: "unknown" };
     }
-    return readMedication(client, id);
+    return readMedication(client, id, today);
   }
 
-  const current = await readMedication(client, id);
-  if (!current.ok) {
-    return current;
+  const row = await readRow(client, id);
+  if (!row.ok) {
+    return row;
   }
 
-  const delta = input.counted - current.data.quantity_on_hand;
-  // Already at the counted figure. Appending a zero-delta `adjustment` would
-  // record an event that says nothing, so the unchanged row is the answer — a
-  // successful no-op, not a validation failure.
+  // As of `written`, NOT the user's `today`: this figure is stamped onto a row
+  // dated `occurred_on = written`, and a projection has to be as of the date it
+  // carries. The two may differ by a calendar day, so it is computed here
+  // rather than read off the `MedicationView` the same call returns.
+  //
+  // The projection deliberately excludes the row about to be written. Applying
+  // this recount's own delta first would make the projection self-referential —
+  // the CHECK would still pass, and every correction would record a zero
+  // discrepancy.
+  const { projectedQuantity } = computeSupply({
+    events: row.data.supply_events,
+    dosages: row.data.dosage_changes,
+    expiryDate: row.data.expiry_date,
+    today: written,
+  });
+
+  // Rounded once, up front, and used for BOTH the stored column and the delta.
+  // `counted_quantity` is `numeric` with unbounded scale while `subtractExact`
+  // works at six places, so storing the raw value would let the column and the
+  // delta disagree at the seventh decimal — and Postgres, comparing in exact
+  // `numeric`, answers `23514`. Zod bounds magnitude, not precision, so
+  // `counted: 0.1234567` is a body the route accepts. The cost is honesty about
+  // the seventh decimal; the row records `0.123457`, which is three orders of
+  // magnitude past anything dispensable.
+  const counted = clampScale(input.counted);
+  // `subtractExact`, never `-`: a JS `0.3 - 0.1` serialises as
+  // `0.19999999999999998` where Postgres computes `0.2`, and the CHECK compares
+  // in exact `numeric`. That failure would surface as an unexplained "Could not
+  // record the supply change".
+  const delta = subtractExact(counted, projectedQuantity);
+
+  // Already at the counted figure. A recount recording no discrepancy says
+  // nothing, so the unchanged row is the answer — a successful no-op, not a
+  // validation failure.
   if (delta === 0) {
-    return current;
+    return { ok: true, data: toView(row.data, today) };
   }
 
-  const { error } = await client
-    .from("supply_events")
-    .insert({ medication_id: id, event_type: "adjustment", quantity_delta: delta, occurred_on: today });
+  const { error } = await client.from("supply_events").insert({
+    medication_id: id,
+    event_type: "recount",
+    quantity_delta: delta,
+    counted_quantity: counted,
+    projected_quantity: projectedQuantity,
+    occurred_on: written,
+  });
 
   if (error) {
     if (error.code === FK_VIOLATION) {
@@ -443,7 +534,7 @@ export async function recordSupply(
     logDbError("recordSupply.correction", error);
     return { ok: false, error: "unknown" };
   }
-  return readMedication(client, id);
+  return readMedication(client, id, today);
 }
 
 /**
@@ -456,6 +547,7 @@ export async function setArchived(
   client: SupabaseClient,
   id: string,
   archived: boolean,
+  today: string,
 ): Promise<Result<MedicationView>> {
   const now = new Date().toISOString();
   const { data, error } = await client
@@ -472,5 +564,5 @@ export async function setArchived(
   if (data.length === 0) {
     return { ok: false, error: "not_found" };
   }
-  return readMedication(client, id);
+  return readMedication(client, id, today);
 }

@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { json, jsonError, readJsonBody, zodFieldErrors } from "@/lib/api/json";
 import { readId } from "@/lib/api/params";
+import { resolveTodayForUser } from "@/lib/dates";
 import { updateMedicationDetails } from "@/lib/db/medications";
 import { createClient } from "@/lib/supabase";
 import { medicationDetailsSchema } from "@/lib/validation/medication";
@@ -38,7 +39,12 @@ export const PATCH: APIRoute = async (context) => {
   // `parsed.data` carries only `name`, `specialist_id` and `expiry_date`. An
   // `updated_at` sent in the body is dropped here and the module stamps its
   // own; `archived_at` cannot be smuggled in through a details edit at all.
-  const result = await updateMedicationDetails(supabase, id, parsed.data);
+  const result = await updateMedicationDetails(
+    supabase,
+    id,
+    parsed.data,
+    resolveTodayForUser(context.locals.user.user_metadata),
+  );
   if (!result.ok) {
     if (result.error === "not_found") {
       return jsonError(404, "Medication not found");
