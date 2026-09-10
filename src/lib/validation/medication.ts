@@ -36,10 +36,31 @@ const MAX_QUANTITY = 100_000;
  * state distinct from archival. Only negatives are refused, mirroring
  * `dosage_changes_daily_dosage_non_negative`.
  */
+/**
+ * The smallest non-zero dosage the supply engine can divide by.
+ *
+ * `@/lib/decimal` scales operands by `10^6`, so a divisor below `5e-7` rounds to
+ * **zero** and `floorDivide` answers `Infinity` (the walk then never decrements
+ * and reports "lasts until expiry" — the over-report the PRD calls a product
+ * failure) or `NaN` (which reaches `addDays` and renders as the literal string
+ * `"0NaN-NaN-NaN"`). Magnitude bounds alone do not prevent this: `0.0000004`
+ * satisfies `min(0).max(1000)`.
+ *
+ * The floor is the module's own scale rather than a clinical opinion — a
+ * millionth of a unit per day is already far past anything dispensable, and the
+ * engine cannot represent smaller. Zero stays legal: it is the schema's
+ * first-class "I have stopped taking this" and is a distinct branch in the walk
+ * that never divides.
+ */
+const MIN_NONZERO_DOSAGE = 0.000001;
+
 const dailyDosageField = z
   .number({ error: "Enter the daily dosage as a number" })
   .min(0, "Daily dosage cannot be negative")
-  .max(MAX_DAILY_DOSAGE, `Daily dosage must be ${MAX_DAILY_DOSAGE} or less`);
+  .max(MAX_DAILY_DOSAGE, `Daily dosage must be ${MAX_DAILY_DOSAGE} or less`)
+  .refine((value) => value === 0 || value >= MIN_NONZERO_DOSAGE, {
+    error: `A non-zero daily dosage must be ${MIN_NONZERO_DOSAGE} or more`,
+  });
 
 /**
  * A starting or corrected quantity. Zero is legal here too — a user who has

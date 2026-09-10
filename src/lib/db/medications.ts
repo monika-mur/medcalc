@@ -1,6 +1,6 @@
 import type { Tables } from "@/db/database.types";
 import { resolveToday } from "@/lib/dates";
-import { clampScale, subtractExact } from "@/lib/decimal";
+import { addExact, clampScale, subtractExact } from "@/lib/decimal";
 import type { SupabaseClient } from "@/lib/supabase";
 import { computeSupply, doseInForce } from "@/lib/supply";
 import type { MedicationCreateInput, MedicationDetailsInput, SupplyInput } from "@/lib/validation/medication";
@@ -174,7 +174,13 @@ function toView(row: MedicationRow, today: string): MedicationView {
   const { specialists, dosage_changes, supply_events, ...medication } = row;
 
   const currentDosage = doseInForce(dosage_changes, today);
-  const quantityOnHand = supply_events.reduce((sum, event) => sum + event.quantity_delta, 0);
+  // `addExact`, not `+`: these are `numeric` columns, and a ledger holding 0.3
+  // and -0.1 sums to 0.19999999999999998 under raw float addition. Nothing
+  // renders this figure today — Phase 1 moved every display to
+  // `projected_quantity` — but it is public on `MedicationView` and serialised
+  // into the API response, so the drift would be inherited by whoever reads it
+  // next rather than introduced by them.
+  const quantityOnHand = supply_events.reduce((sum, event) => addExact(sum, event.quantity_delta), 0);
   const supply = computeSupply({
     events: supply_events,
     dosages: dosage_changes,
@@ -306,7 +312,8 @@ export async function createMedication(
     const { error: supplyError } = await client.from("supply_events").insert({
       medication_id: medication.id,
       event_type: "refill",
-      quantity_delta: input.quantity,
+      // Clamped on the way in — see the refill branch of `recordSupply`.
+      quantity_delta: clampScale(input.quantity),
       occurred_on: written,
     });
     if (supplyError) {
@@ -461,9 +468,19 @@ export async function recordSupply(
   const written = todayUtc();
 
   if (input.kind === "refill") {
-    const { error } = await client
-      .from("supply_events")
-      .insert({ medication_id: id, event_type: "refill", quantity_delta: input.amount, occurred_on: written });
+    // Clamped for the same reason `counted` is below, one door further along.
+    // Zod bounds magnitude and not precision, so a raw request may send seven
+    // decimal places; stored unclamped, they reach the engine and the next
+    // correction on this medication derives its delta at six places against a
+    // seven-place projection. Postgres compares in exact `numeric` and answers
+    // `23514`. Rounding on the way in keeps every projection derived from this
+    // ledger within the scale `subtractExact` works at.
+    const { error } = await client.from("supply_events").insert({
+      medication_id: id,
+      event_type: "refill",
+      quantity_delta: clampScale(input.amount),
+      occurred_on: written,
+    });
 
     if (error) {
       if (error.code === FK_VIOLATION) {
