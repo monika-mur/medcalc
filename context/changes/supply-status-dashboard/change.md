@@ -1,7 +1,7 @@
 ---
 change_id: supply-status-dashboard
 title: Supply-status dashboard (S-04)
-status: implementing
+status: implemented
 created: 2026-09-06
 updated: 2026-09-10
 archived_at: null
@@ -249,39 +249,108 @@ distinct from the `medications.*` lines 3.10 looks for.
 predicted — verified, not edited.
 
 ---
+### 2026-09-10 — Close-out: the slice landed through PR #34
 
-## Resume here — Close-out
+**C.1–C.4 are complete. S-04 is done and live in production.**
 
-**Next:** Close-out items C.1–C.4. Phase 3 is closed; no phase work remains.
+#### The pull request — the first one since the lesson that demanded it
 
-- **C.1 is done** — `follow-ups/supply-engine-tests.md` is written and leads
-  with the red-equality case and worked example 5, per the plan's instruction.
-  It also carries the display-path defect found today and the
-  exhaustion-at-`bound` tie-resolution case, neither of which is in the plan's
-  _Testing Strategy_ list.
-- **C.2 — the pull request.** The branch `feat/supply-status-dashboard` has
-  **never been pushed**. Push it, open a PR against `master`, let CI run, merge
-  there, and close [#5](https://github.com/monika-mur/medcalc/issues/5) from the
-  PR body. **Never fast-forward `master`** — `lessons.md` → _Open a pull request
-  for every slice_ records that S-02 and S-03 both landed as local
-  fast-forwards, and that the gate cannot be reinstated afterwards: once
-  `master` carries the commits the branch is 0 ahead and GitHub refuses to open
-  a PR. This is the first slice planned since that lesson was written.
-- **C.3 — `roadmap.md`.** S-04 currently reads `in-progress` in both the
-  At-a-glance row (`:36`) and the item body, committed in `f75ee41`. Flip both
-  to `done` and add the `## Done` entry **citing the PR**, from the PR rather
-  than afterwards.
-- **C.4** — this file, kept current.
+`feat/supply-status-dashboard` was pushed (7 commits, never previously pushed),
+[PR #34](https://github.com/monika-mur/medcalc/pull/34) was opened against
+`master`, CI passed in 1m04s, and the PR was **merged on GitHub**.
 
-### Environment state at hand-off
+**`master` was not fast-forwarded, and that is checkable rather than asserted.**
+The merge commit `d9f7596` has **two parents** — `0c2715f` (the previous master
+tip) and `4b2b146` (the branch tip). A fast-forward would have left `master`
+pointing at `4b2b146` with one parent. `--merge` was chosen over `--squash`
+deliberately: squashing would have collapsed the seven commits into one, and
+every per-phase SHA recorded in `plan.md`'s Progress section would then point at
+a commit not reachable from `master`.
 
-Docker, the local Supabase stack and `npm run dev` on 4321 were all left
-**running** at the end of this session. The database holds the Phase 3 manual
-fixtures (one specialist, `Recount-30`, `Frac-Point3`, `Seven-Dec`, one visit)
-plus the recount rows the walk produced. Nothing downstream needs them — the
-next `db:reset` from any worktree may take them.
+This is the first slice planned since `lessons.md` → _Open a pull request for
+every slice; never fast-forward master_ was written, and the first to honour it.
+The payoff is visible in `roadmap.md`'s Evidence column: S-04's row cites
+`[PR #34]` in the same shape as S-01's `[PR #26]`, where S-02 and S-03 can only
+name commit ranges followed by "no PR".
 
-The scratch harness is still not in the repo; it lives in a temp directory and
-holds **copies** of `src/lib/{dates,decimal,supply}.ts`, so it is stale the
-moment those change. `scratch/engine-harness.md` is the in-repo record, and
-`follow-ups/supply-engine-tests.md` is now the specification that outlives both.
+**Issue [#5](https://github.com/monika-mur/medcalc/issues/5) closed itself** from
+the PR body's `Closes #5` — state `CLOSED`, reason `COMPLETED`. Not closed by
+hand afterwards, which is the failure mode the same lesson names.
+
+#### The production deploy, verified by name
+
+Merging pushed to `master`, which fired the deploy job (PRs deliberately do not
+deploy — that step was removed after `--env preview` was found shipping every PR
+straight to production). Run `34499290266` succeeded, and per `lessons.md` →
+_Read the deploy log for the target name_ the target was confirmed **in the log
+rather than inferred from the config**:
+
+```
+Uploaded medcalc (6.13 sec)
+Deployed medcalc triggers (1.24 sec)
+  https://medcalc.medcalc.workers.dev
+Current Version ID: 81b33092-7b3a-4b64-a951-ef99e3156378
+```
+
+`curl -k` against the deployed Worker returns **200** on `/` and **302** on
+`/dashboard` (the auth redirect, as expected when signed out). The `-k` is the
+corporate TLS proxy, per `CLAUDE.md` → _Commands_; without it a healthy endpoint
+reports `000` and reads as unreachable.
+
+So "live in production" in the roadmap's Evidence column is a verified statement,
+not an optimistic one.
+
+#### What CI actually proved
+
+`lint` and `build`, on Node 22. **Not** `npm run typecheck` — still unenforced,
+per the open follow-up `manage-doctor-visits/follow-ups/typecheck-in-ci.md` — and
+no test of behaviour, because this slice ships none. The green check means the
+code compiles and lints.
+
+Everything that actually verified this slice was manual: the developer's browser
+walk of 3.5–3.10, the pgTAP 70/70 run, and a scratch harness that is not in the
+repo. `follow-ups/supply-engine-tests.md` is the durable record of what a real
+suite must assert, and it now outlives all three.
+
+One CI annotation, unrelated and not actionable here: `actions/checkout@v4`,
+`actions/setup-node@v4` and `cloudflare/wrangler-action@v3` target Node 20, which
+GitHub deprecated; the runner forced them onto Node 24. It affects every workflow
+run in the repo, not this slice.
+
+#### The close-out edits went through their own pull request
+
+`roadmap.md`'s flip and this entry are themselves changes to `master`, and the
+same lesson applies to them — plus any direct push to `master` triggers a
+production deploy. They were therefore branched as `docs/s-04-close-out` off the
+merge commit and taken through a second PR rather than pushed straight.
+
+**One thing worth knowing for next time.** `git checkout master` was attempted
+while `plan.md` carried the uncommitted C.1 tick, so the checkout aborted — but
+the `git pull` chained after it still ran, on the feature branch, fast-forwarding
+`feat/supply-status-dashboard` up to `d9f7596`. Harmless: the branch caught up to
+`master`, which is the opposite direction from the one the lesson forbids, and
+`master` itself was untouched. The general shape is worth remembering — a `&&`
+chain whose first command aborts on a dirty tree does not necessarily stop the
+rest from doing something on the branch you are still standing on.
+
+#### Slice state
+
+- **S-04 is done** in `roadmap.md` — At-a-glance row, item body, and a `## Done`
+  entry citing PR #34.
+- `change.md` → `status: implemented`. `archived_at` stays `null`; archival is
+  `/10x-archive`'s to stamp, and the folder should not move until then.
+- **The next slice is S-05 (mid-supply dosage change)**, the roadmap's north
+  star. Two things in this folder are addressed to it specifically: the
+  `not_used` / "Stopped" label is wrong for a medication whose dosage rows are
+  all future-dated (unreachable today, S-05's whole purpose), and the Phase 2
+  note that the plan's literal Desired-End-State scenario cannot be seeded
+  through the UI — every refill writes `occurred_on = todayUtc()`, so a
+  back-dated fixture needs the service role, or the visit gets moved relative to
+  the card's own supply-end date instead.
+
+#### Environment left running
+
+Docker, the local Supabase stack (Studio on `:54323`) and `npm run dev` on
+`:4321` are all still up, holding the Phase 3 manual fixtures and the recount
+rows the walk produced. Nothing downstream needs them; the next `db:reset` from
+any worktree may take them.
