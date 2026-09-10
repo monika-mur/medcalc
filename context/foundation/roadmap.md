@@ -3,7 +3,7 @@ project: MedCalc
 version: 1
 status: draft
 created: 2026-07-04
-updated: 2026-09-06
+updated: 2026-09-10
 prd_version: 1
 main_goal: speed
 top_blocker: capacity
@@ -33,7 +33,7 @@ Individuals managing multiple chronic medications can't reliably tell whether th
 | S-01 | manage-specialists         | add, view, and manage the specialists they see                                             | F-01          | FR-003                                   | done     | [#2](https://github.com/monika-mur/medcalc/issues/2) |
 | S-02 | manage-medications         | add, edit, and archive a medication with a single current daily dosage                     | F-01, S-01    | FR-004, FR-005, FR-007                   | done     | [#3](https://github.com/monika-mur/medcalc/issues/3) |
 | S-03 | manage-doctor-visits       | add, edit, and delete a doctor visit                                                       | F-01, S-01    | FR-009, FR-010                           | done     | [#4](https://github.com/monika-mur/medcalc/issues/4) |
-| S-04 | supply-status-dashboard    | see, per medication, the calculated supply-end date and color status vs. next visit        | S-02, S-03    | FR-011, US-01                            | in-progress | [#5](https://github.com/monika-mur/medcalc/issues/5) |
+| S-04 | supply-status-dashboard    | see, per medication, the calculated supply-end date and color status vs. next visit        | S-02, S-03    | FR-011, US-01                            | done | [#5](https://github.com/monika-mur/medcalc/issues/5) |
 | S-05 | mid-supply-dosage-change   | schedule a future dosage change and see the recalculated status                            | S-02, S-04    | FR-006, US-02                            | proposed | [#6](https://github.com/monika-mur/medcalc/issues/6) |
 | S-06 | liquid-medication-tracking | track a liquid medication's supply using container capacity and post-opening expiry        | S-02, S-04    | FR-008                                   | proposed | [#7](https://github.com/monika-mur/medcalc/issues/7) |
 
@@ -122,7 +122,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Blockers:** —
 - **Unknowns:** —
 - **Risk:** This is the PRD's Primary Success Criterion — the first point where the user gets real end-to-end value. It depends on both entity slices because the dashboard joins medications, visits, and specialists to compute status.
-- **Status:** in-progress
+- **Status:** done
 
 ### S-05: Mid-supply dosage change
 
@@ -183,6 +183,7 @@ Completed items, newest first. A slice lands here when its change is implemented
 
 | ID   | Change ID                | Outcome delivered                                                               | Completed  | Evidence                                                                                                                             |
 | ---- | ------------------------ | ------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| S-04 | supply-status-dashboard  | Per medication, the calculated supply-end date and a green/yellow/red status vs. the next specialist visit | 2026-09-10 | [#5](https://github.com/monika-mur/medcalc/issues/5) · [PR #34](https://github.com/monika-mur/medcalc/pull/34) · live in production |
 | S-03 | manage-doctor-visits     | Add, list, edit, and delete a doctor visit (date + specialist)                  | 2026-08-30 | [#4](https://github.com/monika-mur/medcalc/issues/4) · commits `c152215..f0c3321`, `e03661d`, `b74cefb` — no PR · live in production |
 | S-02 | manage-medications       | Add, edit, archive, and restore a medication with a single current daily dosage | 2026-08-30 | [#3](https://github.com/monika-mur/medcalc/issues/3) · commits `3455061..0b33a31`, `3741c38` — no PR · live in production            |
 | S-01 | manage-specialists       | Add, list, edit, and delete specialists; delete blocked while referenced        | 2026-08-27 | [#2](https://github.com/monika-mur/medcalc/issues/2) · [PR #26](https://github.com/monika-mur/medcalc/pull/26) · live in production  |

@@ -534,7 +534,7 @@ Rollback is `git revert` — nothing is written that the previous code cannot re
 
 #### Manual
 
-- [ ] C.1 `follow-ups/supply-engine-tests.md` exists and leads with the red-equality case and worked example 5
-- [ ] C.2 Landed through a pull request against `master` that closed #5; `master` never fast-forwarded
-- [ ] C.3 `roadmap.md` reads `done` for S-04 in both places and `## Done` cites the PR
-- [ ] C.4 `change.md` records per-phase session state and anything the plan did not predict
+- [x] C.1 `follow-ups/supply-engine-tests.md` exists and leads with the red-equality case and worked example 5
+- [x] C.2 Landed through a pull request against `master` that closed #5; `master` never fast-forwarded
+- [x] C.3 `roadmap.md` reads `done` for S-04 in both places and `## Done` cites the PR
+- [x] C.4 `change.md` records per-phase session state and anything the plan did not predict
