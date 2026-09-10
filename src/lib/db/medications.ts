@@ -1,5 +1,6 @@
 import type { Tables } from "@/db/database.types";
 import { resolveToday } from "@/lib/dates";
+import { clampScale, subtractExact } from "@/lib/decimal";
 import type { SupabaseClient } from "@/lib/supabase";
 import { computeSupply, doseInForce } from "@/lib/supply";
 import type { MedicationCreateInput, MedicationDetailsInput, SupplyInput } from "@/lib/validation/medication";
@@ -231,7 +232,7 @@ export async function listMedications(client: SupabaseClient, today: string): Pr
  * `.single()` turns "no such row" into a PostgREST error and this needs it as a
  * domain outcome.
  */
-async function readMedication(client: SupabaseClient, id: string, today: string): Promise<Result<MedicationView>> {
+async function readRow(client: SupabaseClient, id: string): Promise<Result<MedicationRow>> {
   const { data, error } = await client.from("medications").select(MEDICATION_SELECT).eq("id", id).limit(1);
 
   if (error) {
@@ -243,7 +244,12 @@ async function readMedication(client: SupabaseClient, id: string, today: string)
   if (!row) {
     return { ok: false, error: "not_found" };
   }
-  return { ok: true, data: toView(row, today) };
+  return { ok: true, data: row };
+}
+
+async function readMedication(client: SupabaseClient, id: string, today: string): Promise<Result<MedicationView>> {
+  const row = await readRow(client, id);
+  return row.ok ? { ok: true, data: toView(row.data, today) } : row;
 }
 
 /**
@@ -432,19 +438,17 @@ export async function setDosage(
 }
 
 /**
- * A refill appends what was added. A correction states the counted total, so
- * the module reads the ledger sum and appends the difference as an
- * `adjustment` — `recount` is not used here, because an honest recount needs
- * the `projected_quantity` only S-04's consumption engine can supply.
+ * A refill appends what was added. A correction states the counted total, and
+ * is recorded as a `recount` carrying both figures — what was counted and what
+ * the engine projected — so the discrepancy between them is a fact in the
+ * ledger rather than a number folded away.
  *
- * `counted_quantity` and `projected_quantity` are left unset:
- * `supply_events_recount_fields_match_type` requires both to be NULL on a
- * non-recount.
- *
- * The correction reads before it writes, so two tabs correcting at once race
- * and the later write wins on a stale base. Accepted at this volume and
- * single-user scope; S-04's `recount` is the structural fix, since it records
- * the counted figure itself rather than a delta derived from a read.
+ * S-02 wrote this branch as an `adjustment` derived from the ledger sum,
+ * because "an honest recount needs the `projected_quantity` only S-04's
+ * consumption engine can supply". It supplies it now. That also removes the
+ * stale-base race S-02 documented: the projection comes from the same read that
+ * produces the row, and `supply_events_recount_delta_is_discrepancy` rejects
+ * any row where the three figures disagree.
  */
 export async function recordSupply(
   client: SupabaseClient,
@@ -471,22 +475,57 @@ export async function recordSupply(
     return readMedication(client, id, today);
   }
 
-  const current = await readMedication(client, id, today);
-  if (!current.ok) {
-    return current;
+  const row = await readRow(client, id);
+  if (!row.ok) {
+    return row;
   }
 
-  const delta = input.counted - current.data.quantity_on_hand;
-  // Already at the counted figure. Appending a zero-delta `adjustment` would
-  // record an event that says nothing, so the unchanged row is the answer — a
-  // successful no-op, not a validation failure.
+  // As of `written`, NOT the user's `today`: this figure is stamped onto a row
+  // dated `occurred_on = written`, and a projection has to be as of the date it
+  // carries. The two may differ by a calendar day, so it is computed here
+  // rather than read off the `MedicationView` the same call returns.
+  //
+  // The projection deliberately excludes the row about to be written. Applying
+  // this recount's own delta first would make the projection self-referential —
+  // the CHECK would still pass, and every correction would record a zero
+  // discrepancy.
+  const { projectedQuantity } = computeSupply({
+    events: row.data.supply_events,
+    dosages: row.data.dosage_changes,
+    expiryDate: row.data.expiry_date,
+    today: written,
+  });
+
+  // Rounded once, up front, and used for BOTH the stored column and the delta.
+  // `counted_quantity` is `numeric` with unbounded scale while `subtractExact`
+  // works at six places, so storing the raw value would let the column and the
+  // delta disagree at the seventh decimal — and Postgres, comparing in exact
+  // `numeric`, answers `23514`. Zod bounds magnitude, not precision, so
+  // `counted: 0.1234567` is a body the route accepts. The cost is honesty about
+  // the seventh decimal; the row records `0.123457`, which is three orders of
+  // magnitude past anything dispensable.
+  const counted = clampScale(input.counted);
+  // `subtractExact`, never `-`: a JS `0.3 - 0.1` serialises as
+  // `0.19999999999999998` where Postgres computes `0.2`, and the CHECK compares
+  // in exact `numeric`. That failure would surface as an unexplained "Could not
+  // record the supply change".
+  const delta = subtractExact(counted, projectedQuantity);
+
+  // Already at the counted figure. A recount recording no discrepancy says
+  // nothing, so the unchanged row is the answer — a successful no-op, not a
+  // validation failure.
   if (delta === 0) {
-    return current;
+    return { ok: true, data: toView(row.data, today) };
   }
 
-  const { error } = await client
-    .from("supply_events")
-    .insert({ medication_id: id, event_type: "adjustment", quantity_delta: delta, occurred_on: written });
+  const { error } = await client.from("supply_events").insert({
+    medication_id: id,
+    event_type: "recount",
+    quantity_delta: delta,
+    counted_quantity: counted,
+    projected_quantity: projectedQuantity,
+    occurred_on: written,
+  });
 
   if (error) {
     if (error.code === FK_VIOLATION) {

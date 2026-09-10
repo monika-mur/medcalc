@@ -20,6 +20,7 @@ import type { ApiErrorBody } from "@/lib/api/json";
 import { zodFieldErrors } from "@/lib/api/json";
 import type { MedicationStatus, MedicationView } from "@/lib/db/medications";
 import type { SpecialistWithUsage } from "@/lib/db/specialists";
+import { subtractExact } from "@/lib/decimal";
 import {
   dosageInputSchema,
   medicationCreateSchema,
@@ -81,6 +82,33 @@ const STATUS_CLASS: Record<MedicationStatus, string> = {
   out_of_stock: "text-destructive",
   archived: "text-muted-foreground",
 };
+
+/**
+ * The trailing half of the correction notice, when the count differed from what
+ * the app projected. This is the first time the user learns a projection was
+ * being tracked at all, so it is stated in their terms — "2 fewer than
+ * projected" — rather than as a signed delta.
+ *
+ * Computed from the projection the page held before the write rather than from
+ * the `recount` row, which the response does not carry. The two agree: the
+ * module derives its delta from the projection as of `occurred_on`, and the
+ * only way they diverge is a UTC/user-zone day boundary crossing mid-request,
+ * where a silent phrase is better than a wrong one.
+ *
+ * `subtractExact`, never `-`, for the same reason `recordSupply` uses it on the
+ * write path: both figures come from `numeric` columns, and a raw JS
+ * `0.3 - 0.1` renders as `0.19999999999999998`. The ledger is unaffected — the
+ * delta stored in the row is computed server-side and is exact either way — but
+ * the sentence the user reads is the one place that arithmetic is visible, so
+ * getting it wrong here undermines the figure rather than the data.
+ */
+function discrepancyPhrase(before: number | undefined, after: number): string {
+  if (before === undefined || before === after) {
+    return "";
+  }
+  const difference = Math.abs(subtractExact(after, before));
+  return ` — ${String(difference)} ${after < before ? "fewer" : "more"} than projected`;
+}
 
 /** The list is ordered by name server-side; keep local edits in the same order. */
 function byName(a: MedicationView, b: MedicationView) {
@@ -342,12 +370,16 @@ export default function MedicationsManager({ initialMedications, specialists, lo
     // A correction already at the counted figure writes nothing and still
     // answers 200 with the unchanged row, so this path does not special-case
     // it — the message states the resulting count either way.
+    const projectedBefore = medications.find((row) => row.id === id)?.projected_quantity;
     const updated = await send("POST", `/api/medications/${id}/supply`, parsed.data, setPanelErrors);
     if (!updated) return;
 
     applyRow(updated);
     closePanel();
-    setNotice({ tone: "success", text: `${updated.name} corrected to ${String(updated.projected_quantity)} on hand.` });
+    setNotice({
+      tone: "success",
+      text: `${updated.name} corrected to ${String(updated.projected_quantity)} on hand${discrepancyPhrase(projectedBefore, updated.projected_quantity)}.`,
+    });
   }
 
   async function handleArchive(medication: MedicationView, archived: boolean) {

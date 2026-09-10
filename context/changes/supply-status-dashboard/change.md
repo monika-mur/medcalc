@@ -3,7 +3,7 @@ change_id: supply-status-dashboard
 title: Supply-status dashboard (S-04)
 status: implementing
 created: 2026-09-06
-updated: 2026-09-09
+updated: 2026-09-10
 archived_at: null
 ---
 
@@ -118,71 +118,170 @@ request, because the working tree carried two unrelated dirty sets:
 The transient below is now the only known defect in the working tree, and
 Phase 3 closes it.
 
+### 2026-09-09 — Phase 2 closed
+
+The dashboard landed as one commit, `4bf166f`, carrying `CLAUDE.md` alongside
+the code it describes — so criterion 2.13's `git show --stat` evidence is
+honest, which the 2026-09-08 toolkit-sync commit is what made possible.
+
+All four automated criteria passed first time. Two extra mechanical checks were
+run because both underpin a manual item that is otherwise a judgement call:
+`.text-warning{color:var(--warning)}` is present in the built CSS (the
+`:root`-without-`@theme` failure mode compiles clean and silently yields no
+class), and no `client:*` directive exists anywhere in the dashboard tree.
+
+**Nothing predicted by the plan went wrong.** Two small adaptations, neither
+behavioural:
+
+- `astro/prefer-class-list-directive` rejected `class={STATE_CLASS[state]}` on
+  the badge span. Switched to `class:list={[...]}`; lint is a zero-warning gate
+  here, so this had to be fixed rather than noted.
+- Criterion 2.4's grep matched the word `amber-700` in a **comment** in
+  `SupplyCard.astro` — prose, not a class. Reworded to point at `global.css`,
+  where the shade argument now lives in full, rather than weakening the grep.
+  The criterion is mechanical on purpose; a comment that trips it is a comment
+  in the wrong file.
+
+**2.5–2.12 confirmed by the developer in the browser.** 2.6 was walked through
+five visit dates rather than the plan's four — the plan's own positions plus
+both edges of the yellow band (`end-15` green, `end-14` yellow, `end-1` yellow,
+`end` red, `end+3` red), so the band's width was verified as well as the
+red-equality case. The engine's answers for all five were computed against the
+real `src/lib/{dates,decimal,supply}.ts` through a scratch harness before the
+developer walked them, so the expected values handed over were derived rather
+than asserted.
+
+Worth recording for S-05, which will need the same fixtures: **the plan's
+literal Desired-End-State scenario cannot be seeded through the UI.** It wants a
+refill dated ten days ago, and every refill writes `occurred_on = todayUtc()`.
+Either back-date the row in Studio (`supply_events` has no UPDATE policy, so
+that needs the service role) or — simpler, and what was done here — read the
+supply-end date off the card and move the visit relative to it. The classifier
+only ever sees those two dates, so both routes walk identical branches.
+
+---
+### 2026-09-10 — Phase 3 closed
+
+The recount write path landed as `PLACEHOLDER_SHA`. All ten Progress rows
+(3.1–3.10) are ticked; Phase 3 is complete and only Close-out remains.
+
+**The environment came up as the previous session predicted.** Docker Desktop
+was down at session start and had to be launched before `npx supabase start`.
+Criterion 3.4 was run **first**, before seeding anything: `npm run db:reset`
+from this worktree applied all three migrations, and `npm run db:test` returned
+**70/70 across four files**. The reset destroyed the Phase 1 and Phase 2
+fixtures, which is exactly why the plan orders it first — the manual scenario
+was seeded fresh afterwards, once.
+
+Today resolved to `2026-09-10` in **both** UTC and the user's zone
+(Europe/Warsaw), so this session exercised no two-todays skew. A session run
+late in a UTC-behind zone would; the divergence remains untested by hand.
+
+**Every expected value handed to the developer was derived, not asserted.** The
+real `src/lib/{dates,decimal,supply}.ts` were copied into a scratch harness and
+run under `--experimental-strip-types` to produce the fixture supply-end dates,
+the post-correction projection and the five classifier boundaries, before any
+browser step was walked. Same technique as the Phase 2 session.
+
+**3.5, 3.6, 3.8 and 3.9 passed first time.** 3.10 was verified against a clean
+log baseline captured before the run: **zero `medications.*` lines** across the
+whole session, so no successful correction logged an error.
+
+#### Not predicted by the plan — the display path reintroduced the float class
+
+**3.7 failed on its first walk, and the failure was on screen only.** The
+`recount` row was written correctly — `quantity_delta = -0.2` exactly — while
+the success notice read:
+
+> Frac-Point3 corrected to 0.1 on hand — **0.19999999999999998** fewer than projected.
+
+`discrepancyPhrase` in `MedicationsManager.tsx` computed its number with
+`Math.abs(after - before)`. Phase 3 change 1 mandates `subtractExact` on the
+write path and spends a paragraph on why; it says nothing about the display
+path, because the display path did not exist when the plan was written — the
+discrepancy phrase is itself a Phase 3 addition (change 2). So the island
+reintroduced the precise float class the data module two files away exists to
+prevent, in the one place the arithmetic is **visible to the user**.
+
+Fixed by importing `subtractExact` into the island — it is pure, with no server
+dependency, so the import is direct. Verified across five cases against the real
+module: `0.3 → 0.1` now renders `0.2 fewer`, `0.1 → 0.3` renders `0.2 more`,
+`1.005 → 0.9` renders `0.105 fewer`. The integer case (`30 → 18` → "12 fewer")
+and the clamped case (`5 → 0.123457` → "4.876543 fewer") are **byte-identical
+before and after**, so 3.5 and 3.8 did not need re-walking. `npm run typecheck`
+(0 errors, 0 warnings) and `npm run lint` (exit 0) were re-run after the fix and
+both still pass. The developer re-walked 3.7 and confirmed it.
+
+**Why this is worth more than a one-line fix note.** The rule "arithmetic over
+`numeric`-derived values goes through `@/lib/decimal`" was written down for the
+server and followed there; the client-side half was never written down and was
+never followed. Nothing in the type system distinguishes a `number` that came
+from a `numeric` column from one that did not, so neither `typecheck` nor `lint`
+could have caught it — and the database-level assertion the plan _does_ specify
+passes with the defect live, because the row was always right. It took a human
+reading a sentence. That is now the lead entry in the display-path section of
+`follow-ups/supply-engine-tests.md`, with the general rule stated as a review
+check rather than only as a test.
+
+**`npm run build` was deliberately not re-run** after the fix. It was green at
+3.3, and the dev server was live for the browser walk — `lessons.md` → _Never
+run a production build against a live dev server_. The build gate for the fix is
+CI on the pull request.
+
+#### Two log lines that are not defects
+
+The dev-server log carries two `AuthApiError: Invalid Refresh Token` entries at
+12:30:51 — a stale session cookie from before `db:reset` wiped the auth users,
+hit once on the first page load after the reset. Unrelated to this phase, and
+distinct from the `medications.*` lines 3.10 looks for.
+
+#### Files in this commit
+
+- `src/lib/db/medications.ts` — the `recount` write path; `readMedication` split
+  so `readRow` returns the raw row for the projection.
+- `src/components/medications/MedicationsManager.tsx` — the discrepancy notice,
+  including the `subtractExact` fix above.
+- `context/changes/supply-status-dashboard/follow-ups/supply-engine-tests.md` —
+  new; close-out item C.1.
+- `context/changes/supply-status-dashboard/{plan.md,change.md}`.
+
+`src/pages/api/medications/[id]/supply.ts` is **unchanged**, as the plan
+predicted — verified, not edited.
+
 ---
 
-## Resume here — paused 2026-09-08, end of Phase 1
+## Resume here — Close-out
 
-**Next command:** `/10x-implement supply-status-dashboard phase 2`
+**Next:** Close-out items C.1–C.4. Phase 3 is closed; no phase work remains.
 
-Phase 1 is complete and committed. Phase 2 (the dashboard) and Phase 3 (the
-recount write path) are untouched.
+- **C.1 is done** — `follow-ups/supply-engine-tests.md` is written and leads
+  with the red-equality case and worked example 5, per the plan's instruction.
+  It also carries the display-path defect found today and the
+  exhaustion-at-`bound` tie-resolution case, neither of which is in the plan's
+  _Testing Strategy_ list.
+- **C.2 — the pull request.** The branch `feat/supply-status-dashboard` has
+  **never been pushed**. Push it, open a PR against `master`, let CI run, merge
+  there, and close [#5](https://github.com/monika-mur/medcalc/issues/5) from the
+  PR body. **Never fast-forward `master`** — `lessons.md` → _Open a pull request
+  for every slice_ records that S-02 and S-03 both landed as local
+  fast-forwards, and that the gate cannot be reinstated afterwards: once
+  `master` carries the commits the branch is 0 ahead and GitHub refuses to open
+  a PR. This is the first slice planned since that lesson was written.
+- **C.3 — `roadmap.md`.** S-04 currently reads `in-progress` in both the
+  At-a-glance row (`:36`) and the item body, committed in `f75ee41`. Flip both
+  to `done` and add the `## Done` entry **citing the PR**, from the PR rather
+  than afterwards.
+- **C.4** — this file, kept current.
 
-### State on disk
+### Environment state at hand-off
 
-- **Branch:** `feat/supply-status-dashboard`, created off `master` before any
-  commit. Phase 1 is **committed**; the branch is ahead of `master` by that one
-  commit and has never been pushed. `master` must not be fast-forwarded onto it
-  — `lessons.md` → _Open a pull request for every slice_.
-- **Progress 1.1–1.8 all ticked.** Phase 1 is closed.
-- `context/foundation/roadmap.md` S-04 reads `in-progress` in both the
-  At-a-glance row and the item body, **committed** in `f75ee41`.
-- **The working tree is clean.** Nothing is left dirty from this run.
+Docker, the local Supabase stack and `npm run dev` on 4321 were all left
+**running** at the end of this session. The database holds the Phase 3 manual
+fixtures (one specialist, `Recount-30`, `Frac-Point3`, `Seven-Dec`, one visit)
+plus the recount rows the walk produced. Nothing downstream needs them — the
+next `db:reset` from any worktree may take them.
 
-### Files committed in Phase 1
-
-New: `src/lib/decimal.ts`, `src/lib/supply.ts`.
-Modified: `src/lib/dates.ts`, `src/lib/db/medications.ts`,
-`src/components/medications/MedicationsManager.tsx`, `src/pages/medications.astro`,
-`src/pages/visits.astro`, and the five `src/pages/api/medications/**` routes.
-Plus the whole `context/changes/supply-status-dashboard/` folder.
-
-### Environment, for the next session
-
-Docker Desktop was **down** at the start of this session and had to be started
-before `npx supabase start`. Expect the same. The local stack is shared with
-the `MedCalc-s02-medications` and `MedCalc-s03-visits` worktrees, so run
-`npm run db:reset` from **this** worktree before anything that reads the
-database — `lessons.md` → _Reset the database from your own worktree_.
-
-Phase 2 needs no database claim at all: it is a new page, two presentation
-components, a CSS token and two `CLAUDE.md` lines. Its manual checks need
-seeded data, so the stack has to be up for those, but nothing in the phase
-writes a migration. **Phase 3's 3.4 is the one that needs the reset**, and the
-plan says to run it _before_ seeding, because `db:reset` destroys the scenario
-the manual steps need.
-
-The `/medications` fixtures seeded for Phase 1 (`Stale-40`, `Fresh-10`,
-`Stopped-Zero`, `Gap-NoDosage`) survive only until the next `db:reset`. Phase 2
-needs a second specialist and at least one visit on top of them.
-
-### Two carried-forward cautions
-
-1. **The Phase 1 → Phase 3 transient is live in the working tree.** Phase 1
-   switched the correction pre-fill to `projected_quantity` while
-   `recordSupply` still derives its delta from `quantity_on_hand`, so accepting
-   the pre-filled figure subtracts twice — ledger 30 / projected 20, corrected
-   to 20, comes back reading 10. Do not spend a correction expecting it to
-   behave, on `/medications` or via the dashboard, until Phase 3 lands.
-2. **The harness is not in the repo.** It lives at
-   `%TEMP%\medcalc-p1-harness\check.ts` and holds _copies_ of the three
-   modules, so it is stale the moment `src/lib/` changes — re-copy before
-   re-running. `%TEMP%` is not durable; `scratch/engine-harness.md` is the
-   in-repo record of what it asserts, and close-out item C.1 turns it into
-   `follow-ups/supply-engine-tests.md`.
-
-### Resolved before Phase 2
-
-The `CLAUDE.md` staging conflict flagged on 2026-09-06 is **gone**. The toolkit
-churn, `.claude/**` and `prd.md` were all committed in this session, so Phase 2
-change 5 can amend `CLAUDE.md` lines 65 and 94 and commit the file alongside
-the dashboard code with nothing extra riding along.
+The scratch harness is still not in the repo; it lives in a temp directory and
+holds **copies** of `src/lib/{dates,decimal,supply}.ts`, so it is stale the
+moment those change. `scratch/engine-harness.md` is the in-repo record, and
+`follow-ups/supply-engine-tests.md` is now the specification that outlives both.

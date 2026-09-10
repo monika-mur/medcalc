@@ -495,40 +495,40 @@ Rollback is `git revert` — nothing is written that the previous code cannot re
 
 #### Automated
 
-- [x] 2.1 Type checking passes: `npm run typecheck`
-- [x] 2.2 Linting passes at zero errors and zero warnings: `npm run lint`
-- [x] 2.3 Production build succeeds: `npm run build`
-- [x] 2.4 No hardcoded palette colour in any component (grep returns nothing)
+- [x] 2.1 Type checking passes: `npm run typecheck` — 4bf166f
+- [x] 2.2 Linting passes at zero errors and zero warnings: `npm run lint` — 4bf166f
+- [x] 2.3 Production build succeeds: `npm run build` — 4bf166f
+- [x] 2.4 No hardcoded palette colour in any component (grep returns nothing) — 4bf166f
 
 #### Manual
 
-- [x] 2.5 Groups appear in visit-date order; the visit-less specialist's group is last
-- [x] 2.6 Moving a visit through the four positions drives the badge green → yellow → red → red, equality case included
-- [x] 2.7 An early printed expiry shows the expiry date with the expiry reason
-- [x] 2.8 Dosage 0 shows "Stopped"; zero projected quantity shows "Out of stock"
-- [x] 2.9 No dosage row shows "No dosage recorded", sorts first, shows no date or quantity, links to `/medications`
-- [x] 2.10 The yellow badge renders in amber-700 and `text-warning` resolves to a real class
-- [x] 2.11 Usable at 320 px with no horizontal scrolling
-- [x] 2.12 No `client:*` directive and no hydration script on this page
-- [ ] 2.13 `CLAUDE.md` lines 65 and 94 amended in the same commit as the code
+- [x] 2.5 Groups appear in visit-date order; the visit-less specialist's group is last — 4bf166f
+- [x] 2.6 Moving a visit through the four positions drives the badge green → yellow → red → red, equality case included — 4bf166f
+- [x] 2.7 An early printed expiry shows the expiry date with the expiry reason — 4bf166f
+- [x] 2.8 Dosage 0 shows "Stopped"; zero projected quantity shows "Out of stock" — 4bf166f
+- [x] 2.9 No dosage row shows "No dosage recorded", sorts first, shows no date or quantity, links to `/medications` — 4bf166f
+- [x] 2.10 The yellow badge renders in amber-700 and `text-warning` resolves to a real class — 4bf166f
+- [x] 2.11 Usable at 320 px with no horizontal scrolling — 4bf166f
+- [x] 2.12 No `client:*` directive and no hydration script on this page — 4bf166f
+- [x] 2.13 `CLAUDE.md` lines 65 and 94 amended in the same commit as the code — 4bf166f
 
 ### Phase 3: The recount write path
 
 #### Automated
 
-- [ ] 3.1 Type checking passes: `npm run typecheck`
-- [ ] 3.2 Linting passes at zero errors and zero warnings: `npm run lint`
-- [ ] 3.3 Production build succeeds: `npm run build`
-- [ ] 3.4 pgTAP passes: `npm run db:reset` then `npm run db:test` — run FIRST, before seeding the manual scenario
+- [x] 3.1 Type checking passes: `npm run typecheck`
+- [x] 3.2 Linting passes at zero errors and zero warnings: `npm run lint`
+- [x] 3.3 Production build succeeds: `npm run build`
+- [x] 3.4 pgTAP passes: `npm run db:reset` then `npm run db:test` — run FIRST, before seeding the manual scenario
 
 #### Manual
 
-- [ ] 3.5 A differing correction writes a consistent `recount` row
-- [ ] 3.6 A correction to the projected figure writes no row and returns 200
-- [ ] 3.7 A fractional correction succeeds rather than failing `23514`
-- [ ] 3.8 A seven-decimal `counted` posted directly to the route stores as the six-place rounding
-- [ ] 3.9 The dashboard's supply-end date shifts after the correction
-- [ ] 3.10 No `medications.recordSupply.*` line in the Workers log for either successful case
+- [x] 3.5 A differing correction writes a consistent `recount` row
+- [x] 3.6 A correction to the projected figure writes no row and returns 200
+- [x] 3.7 A fractional correction succeeds rather than failing `23514`
+- [x] 3.8 A seven-decimal `counted` posted directly to the route stores as the six-place rounding
+- [x] 3.9 The dashboard's supply-end date shifts after the correction
+- [x] 3.10 No `medications.recordSupply.*` line in the Workers log for either successful case
 
 ### Close-out
 
