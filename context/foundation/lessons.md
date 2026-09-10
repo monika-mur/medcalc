@@ -318,3 +318,48 @@ condition, and a change that routes around it is reintroducing the silence, not
 the manual step.
 
 **Applies to**: plan, plan-review, implement, impl-review
+
+## Run the implementation review before the merge, not after
+
+**Context**: The end of any slice, between the last phase's manual gate and
+opening the pull request. The shape to recognise: every Progress row is ticked,
+the automated criteria are green, the developer has walked the manual list in a
+browser, and the branch is ready — so pushing and merging looks like the obvious
+next move, and `/10x-impl-review` looks like a formality that can follow.
+
+**Problem**: On 2026-09-10 S-04 (`supply-status-dashboard`) landed exactly that
+way. PR #34 merged as `d9f7596` and deployed to production before
+`/10x-impl-review` was invoked; the developer noticed the omission afterwards and
+asked for the review anyway. It found two defects nothing else had:
+
+`floorDivide` scales its operands by `10^6`, so any divisor below `5e-7` rounds
+to **zero**. `dailyDosageField` bounded magnitude and not precision, so
+`daily_dosage: 0.0000004` was accepted end to end and — with stock on hand — made
+the walk report **"lasts until expiry"**: the "you have enough" over-report the
+PRD names as a product failure, the one direction the plan's own worked example 5
+exists to guard. With nothing on hand the same divisor produced `NaN`, which
+reached `addDays` and rendered the literal string `"0NaN-NaN-NaN"` into a `<time>`
+element. Separately, the refill and create paths wrote `quantity_delta`
+unclamped, reopening the `23514` class Phase 3 had spent a paragraph closing for
+corrections.
+
+What makes this worth a rule is **what did not catch them**. CI ran lint,
+typecheck and build — all green. pgTAP ran 70/70. The developer walked all six
+manual criteria in a browser and found a real defect doing it. None of that
+touched either bug, because both need a raw request rather than the UI, and one
+of them needs a timezone this machine never occupies. Every finding in that review
+was found by *reading* the code; none by running it. The review is not a
+duplicate of the gates that precede it — it is the only gate that reads.
+
+The cost of the ordering was recoverable here only by luck of shape: no
+migration, so rollback was `git revert`, and the fixes went out as a follow-up PR.
+A slice carrying a schema change would not have that exit.
+
+**Rule**: Run `/10x-impl-review` after the final phase's manual gate and **before**
+pushing the branch, and treat its findings as a merge gate rather than as
+follow-up work. Green automated criteria and a completed manual walk are not
+evidence the review would find nothing — they are evidence about a different
+question, since neither one reads the code. Where a review has already been
+skipped, run it anyway and record in the report that it ran post-merge.
+
+**Applies to**: implement, impl-review
