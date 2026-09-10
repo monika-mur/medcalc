@@ -162,7 +162,7 @@ only ever sees those two dates, so both routes walk identical branches.
 ---
 ### 2026-09-10 — Phase 3 closed
 
-The recount write path landed as `PLACEHOLDER_SHA`. All ten Progress rows
+The recount write path landed as `9afc946`. All ten Progress rows
 (3.1–3.10) are ticked; Phase 3 is complete and only Close-out remains.
 
 **The environment came up as the previous session predicted.** Docker Desktop

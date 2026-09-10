@@ -516,19 +516,19 @@ Rollback is `git revert` — nothing is written that the previous code cannot re
 
 #### Automated
 
-- [x] 3.1 Type checking passes: `npm run typecheck`
-- [x] 3.2 Linting passes at zero errors and zero warnings: `npm run lint`
-- [x] 3.3 Production build succeeds: `npm run build`
-- [x] 3.4 pgTAP passes: `npm run db:reset` then `npm run db:test` — run FIRST, before seeding the manual scenario
+- [x] 3.1 Type checking passes: `npm run typecheck` — 9afc946
+- [x] 3.2 Linting passes at zero errors and zero warnings: `npm run lint` — 9afc946
+- [x] 3.3 Production build succeeds: `npm run build` — 9afc946
+- [x] 3.4 pgTAP passes: `npm run db:reset` then `npm run db:test` — run FIRST, before seeding the manual scenario — 9afc946
 
 #### Manual
 
-- [x] 3.5 A differing correction writes a consistent `recount` row
-- [x] 3.6 A correction to the projected figure writes no row and returns 200
-- [x] 3.7 A fractional correction succeeds rather than failing `23514`
-- [x] 3.8 A seven-decimal `counted` posted directly to the route stores as the six-place rounding
-- [x] 3.9 The dashboard's supply-end date shifts after the correction
-- [x] 3.10 No `medications.recordSupply.*` line in the Workers log for either successful case
+- [x] 3.5 A differing correction writes a consistent `recount` row — 9afc946
+- [x] 3.6 A correction to the projected figure writes no row and returns 200 — 9afc946
+- [x] 3.7 A fractional correction succeeds rather than failing `23514` — 9afc946
+- [x] 3.8 A seven-decimal `counted` posted directly to the route stores as the six-place rounding — 9afc946
+- [x] 3.9 The dashboard's supply-end date shifts after the correction — 9afc946
+- [x] 3.10 No `medications.recordSupply.*` line in the Workers log for either successful case — 9afc946
 
 ### Close-out
 
