@@ -33,8 +33,8 @@ Individuals managing multiple chronic medications can't reliably tell whether th
 | S-01 | manage-specialists         | add, view, and manage the specialists they see                                             | F-01          | FR-003                                   | done     | [#2](https://github.com/monika-mur/medcalc/issues/2) |
 | S-02 | manage-medications         | add, edit, and archive a medication with a single current daily dosage                     | F-01, S-01    | FR-004, FR-005, FR-007                   | done     | [#3](https://github.com/monika-mur/medcalc/issues/3) |
 | S-03 | manage-doctor-visits       | add, edit, and delete a doctor visit                                                       | F-01, S-01    | FR-009, FR-010                           | done     | [#4](https://github.com/monika-mur/medcalc/issues/4) |
-| S-04 | supply-status-dashboard    | see, per medication, the calculated supply-end date and color status vs. next visit        | S-02, S-03    | FR-011, US-01                            | done | [#5](https://github.com/monika-mur/medcalc/issues/5) |
-| S-05 | mid-supply-dosage-change   | schedule a future dosage change and see the recalculated status                            | S-02, S-04    | FR-006, US-02                            | proposed | [#6](https://github.com/monika-mur/medcalc/issues/6) |
+| S-04 | supply-status-dashboard    | see, per medication, the calculated supply-end date and color status vs. next visit        | S-02, S-03    | FR-011, US-01                            | done     | [#5](https://github.com/monika-mur/medcalc/issues/5) |
+| S-05 | mid-supply-dosage-change   | schedule a future dosage change and see the recalculated status                            | S-02, S-04    | FR-006, US-02                            | planning | [#6](https://github.com/monika-mur/medcalc/issues/6) |
 | S-06 | liquid-medication-tracking | track a liquid medication's supply using container capacity and post-opening expiry        | S-02, S-04    | FR-008                                   | proposed | [#7](https://github.com/monika-mur/medcalc/issues/7) |
 
 ## Streams
@@ -134,7 +134,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Blockers:** —
 - **Unknowns:** —
 - **Risk:** Chosen north star — the hardest, most differentiating case per the Vision (mid-supply dosage changes are what existing apps get wrong). It cannot land before S-04 exists, since it needs the calculation engine and status display to show the recalculated result — but it is prioritized immediately after S-04, ahead of S-06, given the `speed` goal and its role as the validation milestone.
-- **Status:** proposed
+- **Status:** planning
 
 ### S-06: Liquid medication tracking
 
@@ -181,13 +181,13 @@ This table is the clean handoff to Jira/Linear or any MCP-backed backlog.
 
 Completed items, newest first. A slice lands here when its change is implemented, reviewed, and merged — not when its code is written.
 
-| ID   | Change ID                | Outcome delivered                                                               | Completed  | Evidence                                                                                                                             |
-| ---- | ------------------------ | ------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| S-04 | supply-status-dashboard  | Per medication, the calculated supply-end date and a green/yellow/red status vs. the next specialist visit | 2026-09-10 | [#5](https://github.com/monika-mur/medcalc/issues/5) · [PR #34](https://github.com/monika-mur/medcalc/pull/34) · live in production |
-| S-03 | manage-doctor-visits     | Add, list, edit, and delete a doctor visit (date + specialist)                  | 2026-08-30 | [#4](https://github.com/monika-mur/medcalc/issues/4) · commits `c152215..f0c3321`, `e03661d`, `b74cefb` — no PR · live in production |
-| S-02 | manage-medications       | Add, edit, archive, and restore a medication with a single current daily dosage | 2026-08-30 | [#3](https://github.com/monika-mur/medcalc/issues/3) · commits `3455061..0b33a31`, `3741c38` — no PR · live in production            |
-| S-01 | manage-specialists       | Add, list, edit, and delete specialists; delete blocked while referenced        | 2026-08-27 | [#2](https://github.com/monika-mur/medcalc/issues/2) · [PR #26](https://github.com/monika-mur/medcalc/pull/26) · live in production  |
-| F-01 | domain-schema-foundation | Append-only domain schema for specialists, medications, dosage changes, visits  | 2026-08-27 | [#1](https://github.com/monika-mur/medcalc/issues/1) · migrations `20260813185255`, `20260821182457` — both applied to cloud         |
+| ID   | Change ID                | Outcome delivered                                                                                          | Completed  | Evidence                                                                                                                             |
+| ---- | ------------------------ | ---------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| S-04 | supply-status-dashboard  | Per medication, the calculated supply-end date and a green/yellow/red status vs. the next specialist visit | 2026-09-10 | [#5](https://github.com/monika-mur/medcalc/issues/5) · [PR #34](https://github.com/monika-mur/medcalc/pull/34) · live in production  |
+| S-03 | manage-doctor-visits     | Add, list, edit, and delete a doctor visit (date + specialist)                                             | 2026-08-30 | [#4](https://github.com/monika-mur/medcalc/issues/4) · commits `c152215..f0c3321`, `e03661d`, `b74cefb` — no PR · live in production |
+| S-02 | manage-medications       | Add, edit, archive, and restore a medication with a single current daily dosage                            | 2026-08-30 | [#3](https://github.com/monika-mur/medcalc/issues/3) · commits `3455061..0b33a31`, `3741c38` — no PR · live in production            |
+| S-01 | manage-specialists       | Add, list, edit, and delete specialists; delete blocked while referenced                                   | 2026-08-27 | [#2](https://github.com/monika-mur/medcalc/issues/2) · [PR #26](https://github.com/monika-mur/medcalc/pull/26) · live in production  |
+| F-01 | domain-schema-foundation | Append-only domain schema for specialists, medications, dosage changes, visits                             | 2026-08-27 | [#1](https://github.com/monika-mur/medcalc/issues/1) · migrations `20260813185255`, `20260821182457` — both applied to cloud         |
 
 **S-02 and S-03 carry no PR link because none exists.** Both slices were fast-forwarded onto master and deployed straight to production on 2026-08-30, so the Evidence column names commit ranges instead. The gate cannot be reinstated after the fact — both branches are now 0 commits ahead of master, so GitHub refuses to open a retrospective PR ("there isn't anything to compare"). Each slice was reviewed through `/10x-impl-review` (`reviews/impl-review.md` in its change folder) rather than in a diff view, which is why they still qualify as "reviewed" above. The rule that prevents a repeat is `lessons.md` → _Open a pull request for every slice; never fast-forward master_.
 

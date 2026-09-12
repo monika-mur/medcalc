@@ -109,6 +109,40 @@ Whichever is chosen, it interacts with `CLAUDE.md` → _Dates_, which is a live
 contract with a documented history of a bug caused by getting this wrong. **The
 amendment to that section is part of the slice, not an afterthought.**
 
+## S-05 widens the same seam from the other side of UTC
+
+`/10x-plan-review` of S-05 (mid-supply-dosage-change), 2026-09-12, found the mirror-image
+case (finding F5, report at `../../mid-supply-dosage-change/reviews/plan-review.md`) and
+accepted it into this file rather than fixing it in that plan.
+
+S-05's plan derives a medication's **pending changes** — the list `/medications` shows with a
+Cancel control — against `effective_date > userToday`, matching how `current_dosage` and
+`is_expired` are already resolved. Its date-picker floor, by contrast, is anchored at
+`todayUtc`, because that is the day the INSERT policy compares against. West of UTC in the
+evening `utcToday > userToday`, so a medication's own **current** row — written at
+`todayUtc` when it was created or last changed — reads as `effective_date > userToday` and is
+classified as _pending_ rather than in force: it appears in the pending list with a Cancel
+button, and the date field's default value (also `todayUtc`) collides with it, firing a
+replace-confirmation dialog on what is, from the user's side, an ordinary same-day dosage
+change.
+
+This is the same defect class as the one this file documents, arrived at from the opposite
+clock direction. F0a/F0b above is a row classified as **earlier** than it should be
+(east-of-UTC write, read against a user-today that hasn't caught up, in the narrow post-write
+window); F5 is a row classified as **later** than it should be (west-of-UTC evening, a
+UTC-anchored floor disagreeing with a user-zone read, persistent rather than a narrow
+post-write window). Both trace back to the same unresolved question this file already asks:
+_which date should classify a row at all_, given that a write stamp fixed to UTC by RLS and a
+display date resolved in the user's zone are not the same day for part of every day. Neither
+finding was fixed in place, for the same reason — a partial fix decided under a different
+slice's pressure is the wrong shape for a question that has to be answered once, consistently,
+for every surface that reads `effective_date` or `occurred_on` against a `today`.
+
+Whoever picks up this follow-up should read S-05's `plan-review.md` finding F5 in full before
+choosing an option under _What the slice has to decide_ — the option chosen there has to also
+resolve F5's pending-list/date-field disagreement, or the fix will need a second visit for the
+half of the seam this file did not originally describe.
+
 ## Why it was not fixed during the review
 
 Three reasons, recorded so the deferral is not mistaken for an oversight:
