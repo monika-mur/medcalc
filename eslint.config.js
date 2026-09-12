@@ -50,6 +50,9 @@ const nodeScriptConfig = tseslint.config({
   languageOptions: {
     globals: {
       Buffer: "readonly",
+      // Node 22 ships fetch as a global; check-migration-drift.mjs uses it to
+      // reach the Supabase Management API without adding an HTTP dependency.
+      fetch: "readonly",
       console: "readonly",
       process: "readonly",
     },
