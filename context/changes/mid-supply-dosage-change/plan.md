@@ -868,21 +868,21 @@ backstop is live — see Phase 1 §3.
 
 #### Automated
 
-- [x] 2.1 `npm run typecheck` clean — fails on `MedicationsManager.tsx:70` and `:78` only; it does not reach `dashboard.ts` or `SupplyCard.astro`
-- [x] 2.2 `npm run lint` clean at 0 errors, 0 warnings
-- [x] 2.3 `npm run build` succeeds (dev server stopped first)
-- [x] 2.4 Existing pgTAP suite still green: `npm run db:test`
+- [x] 2.1 `npm run typecheck` clean — fails on `MedicationsManager.tsx:70` and `:78` only; it does not reach `dashboard.ts` or `SupplyCard.astro` — c155dc3
+- [x] 2.2 `npm run lint` clean at 0 errors, 0 warnings — c155dc3
+- [x] 2.3 `npm run build` succeeds (dev server stopped first) — c155dc3
+- [x] 2.4 Existing pgTAP suite still green: `npm run db:test` — c155dc3
 
 #### Manual
 
-- [ ] 2.5 POST with a future `effective_date` returns 200 and a segmentally-correct `supply_end_date`
-- [ ] 2.6 POST with a past date returns 400 with `fieldErrors.effective_date`, not 500
-- [ ] 2.7 POST with no `effective_date` behaves exactly as before
-- [ ] 2.8 DELETE removes a pending row and restores the supply-end date; unknown date returns 404
-- [ ] 2.9 DELETE for a past date returns 404 (zero-rows check present)
-- [ ] 2.10 DELETE for today's date removes the in-force row and succeeds (deliberate absence of a floor)
-- [ ] 2.11 A medication whose only dosage row is future-dated reports `status: "not_started"`
-- [ ] 2.12 Creating a medication through `/medications` still succeeds and shows its dosage (§7 must not change the ordinary case)
+- [x] 2.5 POST with a future `effective_date` returns 200 and a segmentally-correct `supply_end_date` — c155dc3
+- [x] 2.6 POST with a past date returns 400 with `fieldErrors.effective_date`, not 500 — c155dc3
+- [x] 2.7 POST with no `effective_date` behaves exactly as before — c155dc3
+- [x] 2.8 DELETE removes a pending row and restores the supply-end date; unknown date returns 404 — c155dc3
+- [x] 2.9 DELETE for a past date returns 404 (zero-rows check present) — c155dc3
+- [x] 2.10 DELETE for today's date removes the in-force row and succeeds (deliberate absence of a floor) — c155dc3
+- [x] 2.11 A medication whose only dosage row is future-dated reports `status: "not_started"` — c155dc3
+- [x] 2.12 Creating a medication through `/medications` still succeeds and shows its dosage (§7 must not change the ordinary case) — c155dc3
 
 ### Phase 3: Schedule, list and cancel on `/medications`
 
