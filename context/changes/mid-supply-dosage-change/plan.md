@@ -908,16 +908,16 @@ backstop is live — see Phase 1 §3.
 
 #### Automated
 
-- [x] 4.1 `npm run typecheck` clean
-- [x] 4.2 `npm run lint` clean at 0 errors, 0 warnings
-- [x] 4.3 `npm run build` succeeds (dev server stopped first)
-- [x] 4.4 `npm run db:test` still green
+- [x] 4.1 `npm run typecheck` clean — 859ee16
+- [x] 4.2 `npm run lint` clean at 0 errors, 0 warnings — 859ee16
+- [x] 4.3 `npm run build` succeeds (dev server stopped first) — 859ee16
+- [x] 4.4 `npm run db:test` still green — 859ee16
 
 #### Manual
 
-- [x] 4.5 The end-to-end north-star walk: the scheduled change moves the supply-end date to the segmentally-correct day and reclassifies the status
-- [x] 4.6 Cancelling returns the dashboard's date to its original value exactly
-- [x] 4.7 A not-started medication's reason line names the start date, never "Dosage is set to 0", and it keeps the supply band its figures earn — one that runs out before the next visit reads "Order now"
-- [x] 4.8 A medication with no scheduled change shows no extra line
-- [x] 4.9 Group and card ordering unchanged for medications without scheduled changes
-- [x] 4.10 Dashboard renders at 320px with no horizontal scroll, within a second for ~20 medications
+- [x] 4.5 The end-to-end north-star walk: the scheduled change moves the supply-end date to the segmentally-correct day and reclassifies the status — 859ee16
+- [x] 4.6 Cancelling returns the dashboard's date to its original value exactly — 859ee16
+- [x] 4.7 A not-started medication's reason line names the start date, never "Dosage is set to 0", and it keeps the supply band its figures earn — one that runs out before the next visit reads "Order now" — 859ee16
+- [x] 4.8 A medication with no scheduled change shows no extra line — 859ee16
+- [x] 4.9 Group and card ordering unchanged for medications without scheduled changes — 859ee16
+- [x] 4.10 Dashboard renders at 320px with no horizontal scroll, within a second for ~20 medications — 859ee16
