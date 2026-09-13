@@ -60,6 +60,15 @@ export const POST: APIRoute = async (context) => {
         specialist_id: "Choose a specialist you have added",
       });
     }
+    if (result.error === "date_not_allowed") {
+      // Not a field error, because this form has no date field to hang it on:
+      // `effective_date` on a create is derived server-side and the user never
+      // chose it. Reaching this means the Worker resolved today just before UTC
+      // midnight and Postgres saw the next day — so the medication row landed
+      // and its dosage did not. Say exactly that; the alternative the code used
+      // to take was reporting success and leaving the user's number nowhere.
+      return jsonError(500, "The medication was saved but its dosage was not. Set the dosage from the list.");
+    }
     return jsonError(500, "Could not save the medication");
   }
   return json(result.data, 201);

@@ -22,7 +22,7 @@ import type { MedicationStatus, MedicationView } from "@/lib/db/medications";
 import type { SpecialistWithUsage } from "@/lib/db/specialists";
 import { subtractExact } from "@/lib/decimal";
 import {
-  dosageInputSchema,
+  dosageInputSchemaFor,
   medicationCreateSchema,
   medicationDetailsSchema,
   supplyInputSchema,
@@ -40,6 +40,14 @@ interface Props {
    * from inviting a duplicate of a medication it simply could not see.
    */
   loadFailed: boolean;
+  /**
+   * Today in **UTC**, resolved by `medications.astro`. The floor for a scheduled
+   * `effective_date`, because the INSERT policy compares that column against
+   * Postgres `current_date`. Never derived in here — `CLAUDE.md` → _Dates_ — and
+   * deliberately not the zone the rows on screen were classified in, which is
+   * the user's. The two may differ by a calendar day.
+   */
+  utcToday: string;
 }
 
 type FieldErrors = Record<string, string>;
@@ -70,6 +78,10 @@ const GENERIC_ERROR = "Something went wrong. Please try again.";
 const STATUS_LABEL: Record<MedicationStatus, string> = {
   active: "Active",
   no_dosage: "No dosage recorded",
+  // Neutral, not a warning: nothing is wrong with a medication that starts next
+  // week. Static because the map is keyed by status alone; Phase 3 renders the
+  // start date beside it, from `pending_dosage_changes[0]`.
+  not_started: "Not started yet",
   not_used: "Not used",
   out_of_stock: "Out of stock",
   archived: "Archived",
@@ -78,6 +90,7 @@ const STATUS_LABEL: Record<MedicationStatus, string> = {
 const STATUS_CLASS: Record<MedicationStatus, string> = {
   active: "text-primary",
   no_dosage: "text-destructive",
+  not_started: "text-muted-foreground",
   not_used: "text-muted-foreground",
   out_of_stock: "text-destructive",
   archived: "text-muted-foreground",
@@ -159,7 +172,7 @@ function specialistOptions(specialists: SpecialistWithUsage[]): SelectOption[] {
   }));
 }
 
-export default function MedicationsManager({ initialMedications, specialists, loadFailed }: Props) {
+export default function MedicationsManager({ initialMedications, specialists, loadFailed, utcToday }: Props) {
   const [medications, setMedications] = useState(initialMedications);
   const [showArchived, setShowArchived] = useState(false);
   const [pending, setPending] = useState(false);
@@ -330,7 +343,11 @@ export default function MedicationsManager({ initialMedications, specialists, lo
   async function handleDosage(event: SubmitEvent<HTMLFormElement>, id: string) {
     event.preventDefault();
 
-    const parsed = dosageInputSchema.safeParse({ daily_dosage: toNumber(dosageValue) });
+    // Built from the same UTC today the route floors against, so a date the
+    // server would refuse never leaves the page. No `effective_date` is sent
+    // yet — the field arrives in Phase 3 — and omitting it means "today,
+    // derived server-side", which is the behaviour this panel already had.
+    const parsed = dosageInputSchemaFor(utcToday).safeParse({ daily_dosage: toNumber(dosageValue) });
     if (!parsed.success) {
       setPanelErrors(zodFieldErrors(parsed.error));
       return;

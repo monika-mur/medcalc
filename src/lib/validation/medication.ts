@@ -12,6 +12,9 @@ import { z } from "zod";
  * reaching the ledger. They bound magnitude, not decimal places: half a tablet
  * is a real dosage, and rounding is F2's question, not this slice's.
  *
+ * Three of the four are constants; the dosage shape is a **factory**, because
+ * one of its bounds is the server's own today. See `dosageInputSchemaFor`.
+ *
  * Every object is strict. A body carrying `form` or any of the four liquid
  * columns (`container_capacity`, `estimated_daily_consumption`,
  * `post_opening_expiry_days`, `opened_on`) is REJECTED, not stripped: S-06 owns
@@ -86,10 +89,40 @@ export const medicationDetailsSchema = z.strictObject({
   expiry_date: z.iso.date({ error: "Enter the expiry date as YYYY-MM-DD" }),
 });
 
-/** Recording the current daily dosage, including 0. */
-export const dosageInputSchema = z.strictObject({
-  daily_dosage: dailyDosageField,
-});
+/**
+ * Recording the daily dosage — from today, or from a later date.
+ *
+ * **A factory rather than a constant, and the reason is the bound.**
+ * `effective_date` is the first date in this codebase that a *client* chooses
+ * for a *policy-compared* column. `expiry_date` above is client-chosen but
+ * compared against nothing; `occurred_on` is policy-compared but derived
+ * server-side and no caller may send it. This one is both, so its floor depends
+ * on the server's today and cannot be written down ahead of time.
+ *
+ * That floor must be resolved in **UTC**, never in the user's zone:
+ * `dosage_changes_insert_own` compares against Postgres `current_date`, which is
+ * UTC on Supabase, so a bound taken from the visitor's clock would offer a day
+ * the policy then refuses — the exact shape of the bug
+ * `20260829071323`'s header describes. See `CLAUDE.md` → _Dates_ and
+ * `@/lib/db/medications` → `todayUtc`.
+ *
+ * Omitting the field keeps meaning "today, derived server-side". That is what
+ * leaves every pre-S-05 caller correct.
+ *
+ * The comparison is a string comparison, because `YYYY-MM-DD` sorts
+ * lexicographically and introducing a `Date` here is how this path acquires an
+ * off-by-one-day bug. It is a `refine` and not `.min()` on purpose: `z.iso.date()`
+ * is a `ZodString` underneath, so `.min()` would bound the string's *length*.
+ */
+export function dosageInputSchemaFor(todayUtc: string) {
+  return z.strictObject({
+    daily_dosage: dailyDosageField,
+    effective_date: z.iso
+      .date({ error: "Enter the effective date as YYYY-MM-DD" })
+      .refine((value) => value >= todayUtc, { error: "The effective date cannot be in the past" })
+      .optional(),
+  });
+}
 
 /**
  * Recording supply. A refill adds; a correction states the counted total and
@@ -121,6 +154,6 @@ export const medicationCreateSchema = medicationDetailsSchema.extend({
 });
 
 export type MedicationDetailsInput = z.infer<typeof medicationDetailsSchema>;
-export type DosageInput = z.infer<typeof dosageInputSchema>;
+export type DosageInput = z.infer<ReturnType<typeof dosageInputSchemaFor>>;
 export type SupplyInput = z.infer<typeof supplyInputSchema>;
 export type MedicationCreateInput = z.infer<typeof medicationCreateSchema>;
