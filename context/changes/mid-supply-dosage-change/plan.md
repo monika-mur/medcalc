@@ -852,17 +852,17 @@ backstop is live — see Phase 1 §3.
 
 #### Automated
 
-- [ ] 1.1 `ci/migration-drift-check` merged to `master`, so `scripts/check-migration-drift.mjs` exists before the push
-- [ ] 1.2 `npm run db:reset` applies all migrations cleanly from scratch
-- [ ] 1.3 `npm run db:test` green with the repaired fixtures, same assertion count; the two repaired `throws_ok` still fail for `23505` and `23514`, not `42501`
-- [ ] 1.4 `npx supabase migration list` shows the new migration in the remote column
-- [ ] 1.5 `npm run lint` clean, `npm run typecheck` clean
+- [x] 1.1 `ci/migration-drift-check` merged to `master`, so `scripts/check-migration-drift.mjs` exists before the push
+- [x] 1.2 `npm run db:reset` applies all migrations cleanly from scratch
+- [x] 1.3 `npm run db:test` green with the repaired fixtures, same assertion count; the two repaired `throws_ok` still fail for `23505` and `23514`, not `42501`
+- [x] 1.4 `npx supabase migration list` shows the new migration in the remote column
+- [x] 1.5 `npm run lint` clean, `npm run typecheck` clean
 
 #### Manual
 
-- [ ] 1.6 Studio: INSERT with `effective_date = current_date - 1` refused; `current_date` and `current_date + 7` succeed
-- [ ] 1.7 Creating a medication through `/medications` still succeeds and shows its dosage
-- [ ] 1.8 Changing today's dosage on an existing medication still works
+- [x] 1.6 Studio: INSERT with `effective_date = current_date - 1` refused; `current_date` and `current_date + 7` succeed
+- [x] 1.7 Creating a medication through `/medications` still succeeds and shows its dosage
+- [x] 1.8 Changing today's dosage on an existing medication still works
 
 ### Phase 2: The date through the domain layer and the API
 

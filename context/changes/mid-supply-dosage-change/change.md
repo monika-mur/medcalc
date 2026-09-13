@@ -1,9 +1,9 @@
 ---
 change_id: mid-supply-dosage-change
 title: Mid-supply dosage change (S-05)
-status: plan_reviewed
+status: implementing
 created: 2026-09-10
-updated: 2026-09-12
+updated: 2026-09-13
 archived_at: null
 ---
 

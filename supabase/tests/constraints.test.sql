@@ -125,14 +125,25 @@ select throws_ok($$
 
 -- ---------------------------------------------------------------------------
 -- Dosage series
+--
+-- Every effective_date below is relative to current_date, and has to be.
+-- 20260912210543 tightened dosage_changes_insert_own to
+-- `effective_date >= current_date`, and these inserts sit below the
+-- `set local role authenticated` at :26, so they are policy-checked — a
+-- hardcoded past date is refused 42501. The bare insert here is not wrapped in
+-- an assertion, so its refusal would abort the transaction and take every
+-- assertion after it down with it. Do NOT "fix" that by hoisting the block
+-- above the role switch: running it as the table owner would stop it testing
+-- anything under RLS. The two inserts at current_date + 1 must stay on the SAME
+-- day — their collision is what the 23505 assertion asserts.
 -- ---------------------------------------------------------------------------
 
 insert into public.dosage_changes (medication_id, daily_dosage, effective_date)
-values ('d1000000-0000-0000-0000-00000000000a', 1, '2026-03-01');
+values ('d1000000-0000-0000-0000-00000000000a', 1, current_date + 1);
 
 select throws_ok($$
     insert into public.dosage_changes (medication_id, daily_dosage, effective_date)
-    values ('d1000000-0000-0000-0000-00000000000a', 2, '2026-03-01')
+    values ('d1000000-0000-0000-0000-00000000000a', 2, current_date + 1)
   $$, '23505', null,
   'dosage_changes: two dosages on one day for one medication are rejected');
 
@@ -140,13 +151,13 @@ select throws_ok($$
 -- the read-semantics anchor that makes a partial create harmless
 select lives_ok($$
     insert into public.dosage_changes (medication_id, daily_dosage, effective_date)
-    values ('d1000000-0000-0000-0000-00000000000a', 0, '2026-04-01')
+    values ('d1000000-0000-0000-0000-00000000000a', 0, current_date + 2)
   $$,
   'dosage_changes: daily_dosage = 0 is accepted — stopped, not archived');
 
 select throws_ok($$
     insert into public.dosage_changes (medication_id, daily_dosage, effective_date)
-    values ('d1000000-0000-0000-0000-00000000000a', -1, '2026-05-01')
+    values ('d1000000-0000-0000-0000-00000000000a', -1, current_date + 3)
   $$, '23514', null,
   'dosage_changes: a negative daily_dosage is rejected');
 

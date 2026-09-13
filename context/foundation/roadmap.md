@@ -3,7 +3,7 @@ project: MedCalc
 version: 1
 status: draft
 created: 2026-07-04
-updated: 2026-09-10
+updated: 2026-09-12
 prd_version: 1
 main_goal: speed
 top_blocker: capacity
@@ -34,7 +34,7 @@ Individuals managing multiple chronic medications can't reliably tell whether th
 | S-02 | manage-medications         | add, edit, and archive a medication with a single current daily dosage                     | F-01, S-01    | FR-004, FR-005, FR-007                   | done     | [#3](https://github.com/monika-mur/medcalc/issues/3) |
 | S-03 | manage-doctor-visits       | add, edit, and delete a doctor visit                                                       | F-01, S-01    | FR-009, FR-010                           | done     | [#4](https://github.com/monika-mur/medcalc/issues/4) |
 | S-04 | supply-status-dashboard    | see, per medication, the calculated supply-end date and color status vs. next visit        | S-02, S-03    | FR-011, US-01                            | done     | [#5](https://github.com/monika-mur/medcalc/issues/5) |
-| S-05 | mid-supply-dosage-change   | schedule a future dosage change and see the recalculated status                            | S-02, S-04    | FR-006, US-02                            | planning | [#6](https://github.com/monika-mur/medcalc/issues/6) |
+| S-05 | mid-supply-dosage-change   | schedule a future dosage change and see the recalculated status                            | S-02, S-04    | FR-006, US-02                            | in-progress | [#6](https://github.com/monika-mur/medcalc/issues/6) |
 | S-06 | liquid-medication-tracking | track a liquid medication's supply using container capacity and post-opening expiry        | S-02, S-04    | FR-008                                   | proposed | [#7](https://github.com/monika-mur/medcalc/issues/7) |
 
 ## Streams
@@ -134,7 +134,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Blockers:** —
 - **Unknowns:** —
 - **Risk:** Chosen north star — the hardest, most differentiating case per the Vision (mid-supply dosage changes are what existing apps get wrong). It cannot land before S-04 exists, since it needs the calculation engine and status display to show the recalculated result — but it is prioritized immediately after S-04, ahead of S-06, given the `speed` goal and its role as the validation milestone.
-- **Status:** planning
+- **Status:** in-progress
 
 ### S-06: Liquid medication tracking
 
