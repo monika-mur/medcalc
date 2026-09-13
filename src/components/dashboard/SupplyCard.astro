@@ -51,15 +51,49 @@ const STATE_CLASS: Record<CardState, string> = {
 */
 const isUnknowable = state === "no_dosage";
 
+/*
+  The soonest scheduled change, or `undefined`. `pending_dosage_changes` is
+  ascending and is the only copy of this — read the head rather than adding a
+  second field for it.
+
+  `.at(0)`, not `[0]`: indexed access is not checked under this tsconfig, so
+  `[0]` types as present and every guard on it reads to the linter as
+  always-truthy. `.at()` returns `T | undefined` and tells the truth — the same
+  reason `@/lib/db/medications` reaches for `data.at(0)` and `removed.at(0)`.
+*/
+const nextChange = medication.pending_dosage_changes.at(0);
+
+/*
+  The `not_started` reason names the day the DOSAGE actually begins, which is
+  not necessarily `nextChange`. A medication can carry more than one pending
+  row — a scheduled stop followed later by a scheduled resume — and if the
+  soonest one is itself 0/day, `not_started`'s trigger (a nonzero row is pending
+  *somewhere*) still fires, but pointing the reason at `nextChange` would name
+  the stop date and call it a start. Find the first nonzero one instead.
+*/
+const nextNonzeroChange = medication.pending_dosage_changes.find((change) => change.daily_dosage !== 0);
+
+/*
+  `not_started` is tested on `medication.status`, NOT on `state`: it has no card
+  state of its own by deliberate decision, so it arrives here carrying whatever
+  band `classifySupplyStatus` earned it. That is the point — the colour still
+  says whether to act, and only the wording changes.
+
+  It must never fall to the `stopped` branch below. Before S-05 it did, and the
+  card read "Dosage is set to 0, so nothing is being consumed" for a medication
+  that simply starts next week — the defect S-04 handed over.
+*/
 const reason = isUnknowable
   ? "No daily dosage has been recorded, so supply cannot be calculated."
-  : state === "stopped"
-    ? "Dosage is set to 0, so nothing is being consumed."
-    : medication.supply_end_reason === "expiry"
-      ? "Limited by the printed expiry date, not by how fast it is used."
-      : medication.supply_end_date === null
-        ? "No supply has ever been recorded."
-        : "Based on the recorded doses and refills.";
+  : medication.status === "not_started" && nextNonzeroChange
+    ? `Dosage begins on ${nextNonzeroChange.effective_date}.`
+    : state === "stopped"
+      ? "Dosage is set to 0, so nothing is being consumed."
+      : medication.supply_end_reason === "expiry"
+        ? "Limited by the printed expiry date, not by how fast it is used."
+        : medication.supply_end_date === null
+          ? "No supply has ever been recorded."
+          : "Based on the recorded doses and refills.";
 ---
 
 <li class="border-border bg-card rounded-xl border p-4 shadow-sm">
@@ -106,6 +140,28 @@ const reason = isUnknowable
               <dt>Dosage:</dt>
               <dd class="text-foreground">{medication.current_dosage} / day</dd>
             </div>
+            {/*
+              Only when there is one — no empty row and no "—", because a
+              placeholder on every medication without a scheduled change would
+              be noise on the majority of cards.
+
+              This is what explains a supply-end date the two figures beside it
+              cannot account for: at 1/day with 23 left the date is five weeks
+              out, and the only reason it reads as one week is the change named
+              here. Without this line the dashboard recalculates correctly and
+              silently, which is the half of US-02 that looks like a bug.
+            */}
+            {nextChange && (
+              <div class="flex gap-1">
+                <dt>Changes to:</dt>
+                <dd class="text-foreground">
+                  {nextChange.daily_dosage} / day on{" "}
+                  {/* The stored `YYYY-MM-DD` string, unformatted — see the
+                      supply-end date above. */}
+                  <time datetime={nextChange.effective_date}>{nextChange.effective_date}</time>
+                </dd>
+              </div>
+            )}
           </dl>
         )
       }

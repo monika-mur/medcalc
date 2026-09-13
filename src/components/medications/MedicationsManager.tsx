@@ -682,17 +682,27 @@ export default function MedicationsManager({ initialMedications, specialists, lo
                       */}
                       <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
                         {/*
-                          `not_started` names the day it starts, because "Not
-                          started yet" alone invites the question it is supposed
-                          to answer. The map entry stays as the fallback: the
-                          status is only reachable when every dosage row is
-                          future-dated, so there is always a `[0]` here in
-                          practice, but the `Record` has to be total either way.
+                          `not_started` names the day the dosage actually
+                          begins, which is not necessarily the soonest pending
+                          row: a medication can carry a scheduled stop AND a
+                          later scheduled resume, and `not_started` fires
+                          whenever a nonzero row is pending anywhere in the
+                          series — so the soonest row can itself be 0/day.
+                          Find the first nonzero one rather than assume `[0]`
+                          is it. The map entry stays as the fallback for the
+                          (structurally unreachable, but the `Record` has to
+                          be total) case where none is found.
                         */}
                         <span className={STATUS_CLASS[medication.status]}>
-                          {medication.status === "not_started" && medication.pending_dosage_changes[0]
-                            ? `Starts ${medication.pending_dosage_changes[0].effective_date}`
-                            : STATUS_LABEL[medication.status]}
+                          {(() => {
+                            if (medication.status !== "not_started") return STATUS_LABEL[medication.status];
+                            const nextNonzero = medication.pending_dosage_changes.find(
+                              (change) => change.daily_dosage !== 0,
+                            );
+                            return nextNonzero
+                              ? `Starts ${nextNonzero.effective_date}`
+                              : STATUS_LABEL[medication.status];
+                          })()}
                         </span>
                         {medication.is_expired ? <span className="text-destructive">Expired</span> : null}
                       </p>

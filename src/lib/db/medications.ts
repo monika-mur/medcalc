@@ -23,18 +23,26 @@ export type Medication = Tables<"medications">;
  * fact lost the user's data, so the test is the row count, never the value.
  *
  * `not_started` is the third question in that same family, and S-05 split it out
- * of `not_used`: a medication whose dosage rows are ALL future-dated has a
- * non-zero count and still folds to 0 today, so before the split it read as
- * "Stopped" — the wrong word for "starts next Monday". It sits after
- * `no_dosage` and before `not_used` because a medication with no row in force
- * has no dosage today either way, and "one is scheduled" is the more specific
- * answer.
+ * of `not_used`: a medication with nothing in force today but a real dose
+ * scheduled folds to `current_dosage: 0` the same way a genuine stop does, so
+ * before the split it read as "Stopped" — the wrong word for "starts next
+ * Monday". It sits after `no_dosage` and before `not_used` because a medication
+ * with nothing in force has no dosage today either way, and "one is coming" is
+ * the more specific answer.
  *
- * Reaching it needs the today-or-earlier rows *gone*, which the panel never
- * does: a medication created through the UI always carries a row at `todayUtc`,
- * so scheduling a change leaves two rows and the status stays `active`. The one
- * path through the app is `cancelDosageChange` applied to today's date, which
- * the DELETE policy admits.
+ * **Reachable two ways, not one.** The originally-scoped path is a medication
+ * whose dosage rows are ALL future-dated — no row at all takes effect on or
+ * before today. The other path is a row *in force* today whose value is 0,
+ * with a nonzero row scheduled after it: creating a medication at dosage 0 and
+ * scheduling the real dose later is a normal thing to try through the panel,
+ * since 0 is a legal value on the create form. An earlier draft of this
+ * comment claimed the second path needed `cancelDosageChange`, on the
+ * reasoning that the create form always leaves a row at `todayUtc` — true, but
+ * it missed that the row it leaves can itself be 0. `deriveStatus` tests
+ * `currentDosage === 0` either way, so both paths collapse to one check —
+ * gated on the pending row's *value*, not merely its presence, so a second
+ * pending 0/day row (re-confirming a stop) still reads `not_used` rather than
+ * misfiring into "starts soon".
  */
 export type MedicationStatus = "archived" | "no_dosage" | "not_started" | "not_used" | "out_of_stock" | "active";
 
@@ -178,21 +186,32 @@ interface MedicationRow extends Medication {
  * quantity: the ledger sum never decays, so testing it would report a
  * medication refilled a year ago at one a day as still in stock, which is the
  * "you have enough" over-report the PRD's guardrail forbids.
+ *
+ * `not_started` fires on `currentDosage === 0 && hasNonzeroPending` — nothing
+ * is in force today, but a real (nonzero) dose is coming — not on "every row
+ * is future-dated". A first draft used the narrower test and Metypred (created
+ * at 0/day, real dose scheduled later) still read `not_used`: the create form
+ * always leaves a row at `todayUtc`, and that row can itself be 0. Since
+ * `currentDosage` already folds "no row in force" and "a 0-row in force" to the
+ * same number, one test covers both paths without asking which one a caller is
+ * in.
+ *
+ * The pending row's *value* is what tells this apart from an ordinary stop, not
+ * merely its presence: a medication stopped today with a second 0/day row also
+ * scheduled — a user re-confirming a stop, or a mis-click — is still "zero and
+ * staying zero", so `not_used` is the honest word for it. Only a nonzero
+ * pending row promises a different number is coming.
  */
 function deriveStatus(
   archivedAt: string | null,
   dosageCount: number,
-  pendingCount: number,
+  hasNonzeroPending: boolean,
   currentDosage: number,
   projectedQuantity: number,
 ): MedicationStatus {
   if (archivedAt !== null) return "archived";
   if (dosageCount === 0) return "no_dosage";
-  // Every row the medication has is still in the future, so nothing is in force
-  // yet. Counts rather than dates, because `pendingCount` was derived from the
-  // same `today` one line up and re-deriving it here is how two answers to the
-  // same question get into one function.
-  if (pendingCount === dosageCount) return "not_started";
+  if (currentDosage === 0 && hasNonzeroPending) return "not_started";
   if (currentDosage === 0) return "not_used";
   if (projectedQuantity <= 0) return "out_of_stock";
   return "active";
@@ -260,7 +279,7 @@ function toView(row: MedicationRow, today: string): MedicationView {
     status: deriveStatus(
       medication.archived_at,
       dosage_changes.length,
-      pendingChanges.length,
+      pendingChanges.some((change) => change.daily_dosage !== 0),
       currentDosage,
       supply.projectedQuantity,
     ),
