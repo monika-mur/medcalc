@@ -12,6 +12,16 @@ interface FormFieldProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  /**
+   * Forwarded verbatim to the input. Only meaningful for the types that order
+   * their values — `date` and `number` — and optional because this control is
+   * shared with the specialists and visits islands, which pass neither.
+   *
+   * On a `date` field this is what stops the picker offering a day the server
+   * would refuse. It is a convenience, never the guard: the schema and the RLS
+   * policy are, and a typed-in value bypasses `min` entirely.
+   */
+  min?: string;
   error?: string;
   hint?: ReactNode;
   /** Optional: auth fields carry one, domain fields generally do not. */
@@ -27,6 +37,7 @@ export function FormField({
   value,
   onChange,
   placeholder,
+  min,
   error,
   hint,
   icon,
@@ -59,6 +70,7 @@ export function FormField({
             onChange(e.target.value);
           }}
           placeholder={placeholder}
+          min={min}
           aria-invalid={error ? true : undefined}
           aria-describedby={describedBy}
           className={cn(icon && "pl-10", endContent && "pr-10")}
