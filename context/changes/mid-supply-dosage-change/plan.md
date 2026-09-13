@@ -888,21 +888,21 @@ backstop is live — see Phase 1 §3.
 
 #### Automated
 
-- [x] 3.1 `npm run typecheck` clean
-- [x] 3.2 `npm run lint` clean at 0 errors, 0 warnings
-- [x] 3.3 `npm run build` succeeds (dev server stopped first)
+- [x] 3.1 `npm run typecheck` clean — c854df0
+- [x] 3.2 `npm run lint` clean at 0 errors, 0 warnings — c854df0
+- [x] 3.3 `npm run build` succeeds (dev server stopped first) — c854df0
 
 #### Manual
 
-- [x] 3.4 Scheduling a future change succeeds; the panel lists it and the row updates without reload
-- [x] 3.5 Choosing today still replaces today's dosage with no confirmation dialog
-- [x] 3.6 A collision opens the confirm naming both values; cancel keeps the original, confirm replaces
-- [x] 3.7 Cancel on a pending row removes it and the figures revert
-- [x] 3.8 The date picker will not offer yesterday
-- [x] 3.9 A not-yet-started medication reads "Starts &lt;date&gt;", never "Not used"
-- [x] 3.10 "Stop taking this" with a future date schedules a stop rather than stopping now
-- [x] 3.11 The panel is usable at 320px with no horizontal scroll
-- [x] 3.12 Keyboard: date field, cancel buttons and confirm dialog reachable; dialog returns focus
+- [x] 3.4 Scheduling a future change succeeds; the panel lists it and the row updates without reload — c854df0
+- [x] 3.5 Choosing today still replaces today's dosage with no confirmation dialog — c854df0
+- [x] 3.6 A collision opens the confirm naming both values; cancel keeps the original, confirm replaces — c854df0
+- [x] 3.7 Cancel on a pending row removes it and the figures revert — c854df0
+- [x] 3.8 The date picker will not offer yesterday — c854df0
+- [x] 3.9 A not-yet-started medication reads "Starts &lt;date&gt;", never "Not used" — c854df0
+- [x] 3.10 "Stop taking this" with a future date schedules a stop rather than stopping now — c854df0
+- [x] 3.11 The panel is usable at 320px with no horizontal scroll — c854df0
+- [x] 3.12 Keyboard: date field, cancel buttons and confirm dialog reachable; dialog returns focus — c854df0
 
 ### Phase 4: Surface the change on `/dashboard`
 
