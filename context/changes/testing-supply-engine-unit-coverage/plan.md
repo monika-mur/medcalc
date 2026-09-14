@@ -426,12 +426,12 @@ No data migration. Two production files change visibility only (one function ext
 
 #### Automated
 
-- [x] 5.1 Full suite passes: `npm test`
-- [x] 5.2 Type checking passes: `npm run typecheck`
-- [x] 5.3 Linting passes at zero warnings: `npm run lint`
-- [x] 5.4 Formatting is clean: `npm run format`
+- [x] 5.1 Full suite passes: `npm test` — e4f80b9
+- [x] 5.2 Type checking passes: `npm run typecheck` — e4f80b9
+- [x] 5.3 Linting passes at zero warnings: `npm run lint` — e4f80b9
+- [x] 5.4 Formatting is clean: `npm run format` — e4f80b9
 
 #### Manual
 
-- [x] 5.5 A fresh agent session, given the project rules and `test-plan.md`, names `tests/unit/` and the command unprompted
-- [x] 5.6 Both corrected follow-up files read as corrections, not rewrites of the original reasoning
+- [x] 5.5 A fresh agent session, given the project rules and `test-plan.md`, names `tests/unit/` and the command unprompted — e4f80b9
+- [x] 5.6 Both corrected follow-up files read as corrections, not rewrites of the original reasoning — e4f80b9
