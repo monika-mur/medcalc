@@ -18,11 +18,11 @@ import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import type { ApiErrorBody } from "@/lib/api/json";
 import { zodFieldErrors } from "@/lib/api/json";
-import type { MedicationStatus, MedicationView } from "@/lib/db/medications";
+import { nextNonzeroPendingChange, type MedicationStatus, type MedicationView } from "@/lib/db/medications";
 import type { SpecialistWithUsage } from "@/lib/db/specialists";
 import { subtractExact } from "@/lib/decimal";
 import {
-  dosageInputSchema,
+  dosageInputSchemaFor,
   medicationCreateSchema,
   medicationDetailsSchema,
   supplyInputSchema,
@@ -40,6 +40,14 @@ interface Props {
    * from inviting a duplicate of a medication it simply could not see.
    */
   loadFailed: boolean;
+  /**
+   * Today in **UTC**, resolved by `medications.astro`. The floor for a scheduled
+   * `effective_date`, because the INSERT policy compares that column against
+   * Postgres `current_date`. Never derived in here — `CLAUDE.md` → _Dates_ — and
+   * deliberately not the zone the rows on screen were classified in, which is
+   * the user's. The two may differ by a calendar day.
+   */
+  utcToday: string;
 }
 
 type FieldErrors = Record<string, string>;
@@ -70,6 +78,10 @@ const GENERIC_ERROR = "Something went wrong. Please try again.";
 const STATUS_LABEL: Record<MedicationStatus, string> = {
   active: "Active",
   no_dosage: "No dosage recorded",
+  // Neutral, not a warning: nothing is wrong with a medication that starts next
+  // week. Static because the map is keyed by status alone; Phase 3 renders the
+  // start date beside it, from `pending_dosage_changes[0]`.
+  not_started: "Not started yet",
   not_used: "Not used",
   out_of_stock: "Out of stock",
   archived: "Archived",
@@ -78,6 +90,7 @@ const STATUS_LABEL: Record<MedicationStatus, string> = {
 const STATUS_CLASS: Record<MedicationStatus, string> = {
   active: "text-primary",
   no_dosage: "text-destructive",
+  not_started: "text-muted-foreground",
   not_used: "text-muted-foreground",
   out_of_stock: "text-destructive",
   archived: "text-muted-foreground",
@@ -159,7 +172,7 @@ function specialistOptions(specialists: SpecialistWithUsage[]): SelectOption[] {
   }));
 }
 
-export default function MedicationsManager({ initialMedications, specialists, loadFailed }: Props) {
+export default function MedicationsManager({ initialMedications, specialists, loadFailed, utcToday }: Props) {
   const [medications, setMedications] = useState(initialMedications);
   const [showArchived, setShowArchived] = useState(false);
   const [pending, setPending] = useState(false);
@@ -178,8 +191,29 @@ export default function MedicationsManager({ initialMedications, specialists, lo
   const [editSpecialistId, setEditSpecialistId] = useState("");
   const [editExpiry, setEditExpiry] = useState("");
   const [dosageValue, setDosageValue] = useState("");
+  // Seeded from the `utcToday` prop whenever the panel opens, never from a
+  // clock in here — `CLAUDE.md` → _Dates_.
+  const [dosageDate, setDosageDate] = useState(utcToday);
+  // Whether the user has actually chosen a date this time the panel was opened.
+  // This, and NOT a comparison against `utcToday`, is what "the field was left
+  // alone" means: `utcToday` is a prop frozen at page render, so on a tab left
+  // open across UTC midnight the seeded value silently becomes a past date, and
+  // equality against it stops answering the question being asked.
+  const [dosageDateTouched, setDosageDateTouched] = useState(false);
   const [refillValue, setRefillValue] = useState("");
   const [countedValue, setCountedValue] = useState("");
+  /**
+   * The pending replace-confirm, or `null`. Holds the whole submission rather
+   * than a boolean, so the dialog can name both values and the confirm can fire
+   * the exact call that was intercepted.
+   */
+  const [replacePrompt, setReplacePrompt] = useState<{
+    id: string;
+    name: string;
+    dailyDosage: number;
+    effectiveDate: string;
+    replacing: number;
+  } | null>(null);
 
   // Adding is offered only when the page knows what is already there. After a
   // failed read the list is empty because nothing loaded, so an add form here
@@ -197,7 +231,7 @@ export default function MedicationsManager({ initialMedications, specialists, lo
    * failure would.
    */
   async function send(
-    method: "POST" | "PATCH",
+    method: "POST" | "PATCH" | "DELETE",
     url: string,
     body: unknown,
     setErrors: (errors: FieldErrors) => void,
@@ -205,10 +239,18 @@ export default function MedicationsManager({ initialMedications, specialists, lo
     setNotice(null);
     setPending(true);
     try {
+      // The cancel endpoint is addressed entirely by its URL, so it sends no
+      // body — and a `Content-Type: application/json` header on a bodyless
+      // request advertises a payload that is not there. Widening this helper
+      // rather than dropping to an inline `fetch` (as the specialists and
+      // visits islands do) is deliberate: `send` is what parses the refreshed
+      // `MedicationView` out of the response and routes `fieldErrors` to the
+      // right control, and the cancel needs both.
+      const hasBody = body !== undefined;
       const response = await fetch(url, {
         method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        headers: hasBody ? { "Content-Type": "application/json" } : {},
+        body: hasBody ? JSON.stringify(body) : undefined,
       });
       if (!response.ok) {
         const error = await readApiError(response);
@@ -248,6 +290,8 @@ export default function MedicationsManager({ initialMedications, specialists, lo
       setEditExpiry(medication.expiry_date);
     } else if (kind === "dosage") {
       setDosageValue(String(medication.current_dosage));
+      setDosageDate(utcToday);
+      setDosageDateTouched(false);
     } else if (kind === "refill") {
       setRefillValue("");
     } else {
@@ -312,31 +356,120 @@ export default function MedicationsManager({ initialMedications, specialists, lo
    * not a cleared field — it is the user recording that they have stopped, and
    * the row stays on the list saying so.
    */
-  async function submitDosage(id: string, dailyDosage: number) {
-    const updated = await send("POST", `/api/medications/${id}/dosage`, { daily_dosage: dailyDosage }, setPanelErrors);
+  /**
+   * `effectiveDate` is `undefined` when the user did not choose a date — either
+   * they left the field alone, or they deliberately picked today.
+   *
+   * **Omitting it is still not the same as sending today.** An earlier version
+   * of this note justified that by `setDosage` running its two-clock
+   * compensating retry only for a server-derived date; that gate is gone
+   * (impl-review F1) precisely because this page cannot reliably signal
+   * "server-derived" across a UTC midnight. The reason that remains is simpler
+   * and does not depend on the server's internals: a date sent explicitly is
+   * floored against `utcToday`, and `utcToday` is frozen at page render. Letting
+   * the server derive the day it is actually going to compare against is the
+   * only version that cannot go stale in a long-lived tab.
+   */
+  async function submitDosage(id: string, dailyDosage: number, effectiveDate: string | undefined) {
+    const scheduled = effectiveDate !== undefined;
+    const updated = await send(
+      "POST",
+      `/api/medications/${id}/dosage`,
+      { daily_dosage: dailyDosage, ...(scheduled ? { effective_date: effectiveDate } : {}) },
+      setPanelErrors,
+    );
     if (!updated) return;
 
     applyRow(updated);
     closePanel();
     setNotice({
       tone: "success",
-      text:
-        dailyDosage === 0
+      text: scheduled
+        ? dailyDosage === 0
+          ? `${updated.name} will stop on ${effectiveDate}. Its history is kept.`
+          : `${updated.name} changes to ${String(dailyDosage)} per day on ${effectiveDate}.`
+        : dailyDosage === 0
           ? `${updated.name} marked as not used. Its history is kept.`
           : `${updated.name} now at ${String(dailyDosage)} per day.`,
     });
   }
 
-  async function handleDosage(event: SubmitEvent<HTMLFormElement>, id: string) {
-    event.preventDefault();
-
-    const parsed = dosageInputSchema.safeParse({ daily_dosage: toNumber(dosageValue) });
+  /**
+   * The one door into `submitDosage`, shared by the form and _Stop taking this_
+   * so the button cannot disagree with the field it sits beside.
+   *
+   * The collision check is client-side, against the list already in props. It
+   * can therefore be raced — two tabs, or a stale list — and the server's
+   * behaviour in that case is to replace, unchanged. That is acceptable: this
+   * confirm exists to catch a mistyped date, not to serialise concurrent edits.
+   */
+  function requestDosage(medication: MedicationView, dailyDosage: number) {
+    // Built from the same UTC today the route floors against, so a date the
+    // server would refuse never leaves the page.
+    //
+    // An untouched field is parsed as no date at all rather than as its seeded
+    // value. Both halves of this matter: `utcToday` is the floor AND the seed,
+    // so once the tab has outlived UTC midnight the seeded value is below its
+    // own floor, and parsing it would fail an ordinary dosage change here —
+    // before any request — with a field error on a date the user never chose.
+    const parsed = dosageInputSchemaFor(utcToday).safeParse({
+      daily_dosage: dailyDosage,
+      effective_date: dosageDateTouched ? dosageDate : undefined,
+    });
     if (!parsed.success) {
       setPanelErrors(zodFieldErrors(parsed.error));
       return;
     }
     setPanelErrors({});
-    await submitDosage(id, parsed.data.daily_dosage);
+
+    // Today is never a collision even though a row exists for it: replacing
+    // today's dosage is this panel's original purpose and the hint already says
+    // so. `pending_dosage_changes` is strictly future-dated, so an unchanged
+    // field simply cannot match one — and an untouched one is already
+    // `undefined` by the time it gets here, so the comparison below only ever
+    // decides the case where the user deliberately picked today.
+    const effectiveDate = parsed.data.effective_date === utcToday ? undefined : parsed.data.effective_date;
+    const clash =
+      effectiveDate === undefined
+        ? undefined
+        : medication.pending_dosage_changes.find((change) => change.effective_date === effectiveDate);
+
+    if (clash) {
+      setReplacePrompt({
+        id: medication.id,
+        name: medication.name,
+        dailyDosage: parsed.data.daily_dosage,
+        effectiveDate: clash.effective_date,
+        replacing: clash.daily_dosage,
+      });
+      return;
+    }
+
+    void submitDosage(medication.id, parsed.data.daily_dosage, effectiveDate);
+  }
+
+  function handleDosage(event: SubmitEvent<HTMLFormElement>, medication: MedicationView) {
+    event.preventDefault();
+    requestDosage(medication, toNumber(dosageValue));
+  }
+
+  /**
+   * Cancels one scheduled change. The route answers with the recalculated row,
+   * so the figures revert in place rather than after a reload — and a 404 (the
+   * row was already gone, or never the user's) lands in the panel as an error
+   * notice like any other failure.
+   */
+  async function handleCancelChange(medication: MedicationView, effectiveDate: string) {
+    const updated = await send(
+      "DELETE",
+      `/api/medications/${medication.id}/dosage/${effectiveDate}`,
+      undefined,
+      setPanelErrors,
+    );
+    if (!updated) return;
+
+    applyRow(updated);
+    setNotice({ tone: "success", text: `Scheduled change on ${effectiveDate} cancelled for ${updated.name}.` });
   }
 
   async function handleRefill(event: SubmitEvent<HTMLFormElement>, id: string) {
@@ -567,7 +700,25 @@ export default function MedicationsManager({ initialMedications, specialists, lo
                         it — a medication can be expired AND in any state.
                       */}
                       <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
-                        <span className={STATUS_CLASS[medication.status]}>{STATUS_LABEL[medication.status]}</span>
+                        {/*
+                          `not_started` names the day the dosage actually
+                          begins, which is not necessarily the soonest pending
+                          row — it can itself be 0/day. The rule is shared with
+                          `deriveStatus`'s trigger and the dashboard's reason
+                          line rather than re-derived here; see
+                          `nextNonzeroPendingChange`. The map entry stays as the
+                          fallback for the (structurally unreachable, but the
+                          `Record` has to be total) case where none is found.
+                        */}
+                        <span className={STATUS_CLASS[medication.status]}>
+                          {(() => {
+                            if (medication.status !== "not_started") return STATUS_LABEL[medication.status];
+                            const nextNonzero = nextNonzeroPendingChange(medication.pending_dosage_changes);
+                            return nextNonzero
+                              ? `Starts ${nextNonzero.effective_date}`
+                              : STATUS_LABEL[medication.status];
+                          })()}
+                        </span>
                         {medication.is_expired ? <span className="text-destructive">Expired</span> : null}
                       </p>
                     </div>
@@ -719,49 +870,114 @@ export default function MedicationsManager({ initialMedications, specialists, lo
                     ) : null}
 
                     {open === "dosage" ? (
-                      <form
-                        onSubmit={(event) => handleDosage(event, medication.id)}
-                        className="border-border space-y-4 border-t pt-4"
-                        noValidate
-                        aria-label={`Change the dosage of ${medication.name}`}
-                      >
-                        <FormField
-                          id={`dosage-${medication.id}`}
-                          label="Daily dosage"
-                          type="number"
-                          value={dosageValue}
-                          onChange={(value) => {
-                            setDosageValue(value);
-                            setPanelErrors((previous) => ({ ...previous, daily_dosage: "" }));
+                      <div className="border-border space-y-4 border-t pt-4">
+                        {/*
+                          A scheduled change the user cannot see is a change they
+                          cannot undo: `dosage_changes` has no UPDATE policy, so
+                          cancel-and-reschedule is the whole vocabulary. An empty
+                          list renders nothing rather than an empty-state line —
+                          most medications have no scheduled change and a "None"
+                          row would be noise on every one of them.
+                        */}
+                        {medication.pending_dosage_changes.length > 0 ? (
+                          <section aria-label={`Scheduled changes for ${medication.name}`}>
+                            <h3 className="text-muted-foreground text-xs font-medium">Scheduled changes</h3>
+                            <ul className="mt-2 space-y-2">
+                              {medication.pending_dosage_changes.map((change) => (
+                                <li
+                                  key={change.effective_date}
+                                  className="flex flex-wrap items-center justify-between gap-2 text-sm"
+                                >
+                                  <span className="text-foreground">
+                                    {change.daily_dosage} / day from{" "}
+                                    {/* The stored `YYYY-MM-DD` string, unformatted.
+                                        Formatting means parsing it into a `Date`,
+                                        which is how this screen would acquire an
+                                        off-by-one-day bug. */}
+                                    <time dateTime={change.effective_date}>{change.effective_date}</time>
+                                  </span>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={pending}
+                                    onClick={() => {
+                                      void handleCancelChange(medication, change.effective_date);
+                                    }}
+                                  >
+                                    Cancel this change
+                                  </Button>
+                                </li>
+                              ))}
+                            </ul>
+                          </section>
+                        ) : null}
+
+                        <form
+                          onSubmit={(event) => {
+                            handleDosage(event, medication);
                           }}
-                          error={panelErrors.daily_dosage || undefined}
-                          hint={
-                            <p className="text-muted-foreground mt-1 text-xs">
-                              Takes effect today. Setting it again today replaces today’s value rather than adding a
-                              second one.
-                            </p>
-                          }
-                        />
-                        <div className="flex flex-col gap-2 sm:flex-row">
-                          <Button type="submit" disabled={pending}>
-                            Save dosage
-                          </Button>
-                          {/* Recording 0 is a state, not an erasure — the row stays listed. */}
-                          <Button
-                            type="button"
-                            variant="outline"
-                            disabled={pending}
-                            onClick={() => {
-                              void submitDosage(medication.id, 0);
+                          className="space-y-4"
+                          noValidate
+                          aria-label={`Change the dosage of ${medication.name}`}
+                        >
+                          <FormField
+                            id={`dosage-${medication.id}`}
+                            label="Daily dosage"
+                            type="number"
+                            value={dosageValue}
+                            onChange={(value) => {
+                              setDosageValue(value);
+                              setPanelErrors((previous) => ({ ...previous, daily_dosage: "" }));
                             }}
-                          >
-                            Stop taking this
-                          </Button>
-                          <Button type="button" variant="outline" onClick={closePanel}>
-                            Cancel
-                          </Button>
-                        </div>
-                      </form>
+                            error={panelErrors.daily_dosage || undefined}
+                          />
+                          <FormField
+                            id={`dosage-date-${medication.id}`}
+                            label="Takes effect from"
+                            type="date"
+                            value={dosageDate}
+                            min={utcToday}
+                            onChange={(value) => {
+                              setDosageDate(value);
+                              setDosageDateTouched(true);
+                              setPanelErrors((previous) => ({ ...previous, effective_date: "" }));
+                            }}
+                            error={panelErrors.effective_date || undefined}
+                            hint={
+                              <p className="text-muted-foreground mt-1 text-xs">
+                                Left at today, this replaces today’s value rather than adding a second one. Set a later
+                                date to schedule the change instead — the supply calculation uses the old dose up to
+                                that day and the new one from it. Choosing a date that already has a scheduled change
+                                asks before replacing it.
+                              </p>
+                            }
+                          />
+                          <div className="flex flex-col gap-2 sm:flex-row">
+                            <Button type="submit" disabled={pending}>
+                              Save dosage
+                            </Button>
+                            {/* Recording 0 is a state, not an erasure — the row stays
+                                listed. It goes through `requestDosage` so it honours
+                                the date field above it: a scheduled stop is a real
+                                thing to want, and a button that silently ignored the
+                                date beside it would be lying. */}
+                            <Button
+                              type="button"
+                              variant="outline"
+                              disabled={pending}
+                              onClick={() => {
+                                requestDosage(medication, 0);
+                              }}
+                            >
+                              Stop taking this
+                            </Button>
+                            <Button type="button" variant="outline" onClick={closePanel}>
+                              Cancel
+                            </Button>
+                          </div>
+                        </form>
+                      </div>
                     ) : null}
 
                     {open === "refill" ? (
@@ -834,6 +1050,51 @@ export default function MedicationsManager({ initialMedications, specialists, lo
           </ul>
         )}
       </section>
+
+      {/*
+        Rendered once for the whole list rather than per row, and CONTROLLED
+        rather than trigger-driven like the Archive dialog: it opens from inside
+        the submit path, not from a button press, so there is no element to hang
+        an `AlertDialogTrigger` on. Radix still restores focus to whatever was
+        focused when it opened — the Save dosage button, or the field the user
+        pressed Enter in — which is the behaviour the Archive dialog gets from
+        its trigger.
+
+        Not `variant="destructive"` on the action: replacing a scheduled change
+        is an ordinary edit the user came here to make, and `CLAUDE.md` →
+        _Design conventions_ rations red to genuinely destructive moves. The
+        confirm exists to catch a mistyped date, not to warn.
+      */}
+      <AlertDialog
+        open={replacePrompt !== null}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setReplacePrompt(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Replace the change scheduled for {replacePrompt?.effectiveDate}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {replacePrompt
+                ? `${replacePrompt.name} is already scheduled to change to ${String(replacePrompt.replacing)} / day on ${replacePrompt.effectiveDate}. Saving replaces it with ${String(replacePrompt.dailyDosage)} / day — one dosage is in force per day, so the existing change is removed rather than kept alongside.`
+                : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep the existing change</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (!replacePrompt) return;
+                const { id, dailyDosage, effectiveDate } = replacePrompt;
+                setReplacePrompt(null);
+                void submitDosage(id, dailyDosage, effectiveDate);
+              }}
+            >
+              Replace
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

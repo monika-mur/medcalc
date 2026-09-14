@@ -2,7 +2,7 @@
 import MedicationsManager from "@/components/medications/MedicationsManager";
 import Topbar from "@/components/Topbar.astro";
 import Layout from "@/layouts/Layout.astro";
-import { resolveTodayForUser } from "@/lib/dates";
+import { resolveToday, resolveTodayForUser } from "@/lib/dates";
 import { listMedications, type MedicationView } from "@/lib/db/medications";
 import { listSpecialists, type SpecialistWithUsage } from "@/lib/db/specialists";
 import { createClient } from "@/lib/supabase";
@@ -42,6 +42,16 @@ if (supabase) {
 // add form cannot be completed at all. Explain that and point at the fix rather
 // than rendering a form whose first field has nothing in it.
 const needsSpecialist = !loadFailed && specialists.length === 0;
+
+// **UTC, not the user's zone, and resolved here rather than in the island.**
+// This is the floor a scheduled `effective_date` is checked against, and
+// `dosage_changes_insert_own` compares that column to Postgres `current_date`,
+// which is UTC on Supabase. Resolving it in the visitor's zone would offer a day
+// the database then refuses. The island must not derive it — `CLAUDE.md` →
+// _Dates_: resolve once, server-side, pass it down as a prop. Note this is a
+// different "today" from the `resolveTodayForUser` above, which classifies rows
+// for display; the two may differ by a calendar day, and that is intended.
+const utcToday = resolveToday("UTC");
 ---
 
 <Layout title="Medications">
@@ -79,6 +89,7 @@ const needsSpecialist = !loadFailed && specialists.length === 0;
           initialMedications={medications}
           specialists={specialists}
           loadFailed={loadFailed}
+          utcToday={utcToday}
           client:load
         />
       </div>

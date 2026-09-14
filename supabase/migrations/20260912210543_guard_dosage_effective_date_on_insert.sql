@@ -1,0 +1,72 @@
+-- Guard the past on INSERT into dosage_changes — roadmap S-05 (change:
+-- mid-supply-dosage-change), Phase 1.
+--
+-- WAS: `dosage_changes_insert_own` was `with check ((select auth.uid()) =
+--   user_id)` and nothing more. The DELETE policy has been guarded on
+--   `effective_date >= current_date` since 20260829071323, so the historical
+--   series was protected against REMOVAL and not against REWRITING. Until now
+--   that asymmetry was harmless only by accident: no route accepts a date, and
+--   `setDosage` hardcodes a server-derived UTC today, so no request could reach
+--   the gap.
+--
+-- WHY NOW: S-05 adds a user-chosen `effective_date` to the dosage route. The
+--   moment that route exists, a raw request can back-date a row and rewrite the
+--   series FR-006's segmental calculation reads — the exact thing
+--   20260813185255:285-287 says the immutability rule exists to prevent. The
+--   policy must land BEFORE the route, because the window between "route
+--   accepts a date" and "database refuses a past one" is a window in which
+--   history is writable.
+--
+-- IS: the predicate is deliberately IDENTICAL to the DELETE policy's. A row
+--   that can be inserted can be removed; a row that has taken effect can be
+--   neither. One rule, stated twice, rather than two rules that happen to
+--   agree. Note this also means the cancel path of S-05 removes TODAY's row as
+--   well as future ones — that is intended, and is the only path by which the
+--   application can produce a medication whose dosage has not started yet.
+--
+-- The `(select auth.uid())` wrapper is kept verbatim. 20260821182457 rewrote
+--   every policy that way so the planner hoists the call into a
+--   once-per-statement InitPlan instead of re-evaluating it per row; writing a
+--   bare `auth.uid()` here would silently regress that.
+--
+-- TWO CLOCKS, AND IT DOES NOT FAIL CLOSED. `current_date` is Postgres's clock;
+--   the application derives `effective_date` from the Worker's. A request that
+--   computes today at 23:59:59.9 UTC and reaches Postgres after midnight is
+--   refused `42501`. Sub-second — but the refusal is not harmless, because
+--   `setDosage` DELETEs the target row before it INSERTs. If the day rolls
+--   between the two statements the DELETE has already committed (it was still
+--   `>= current_date` when it ran) and the compensating restore re-inserts at
+--   the same now-past date, so it is refused for the same reason: the row is
+--   destroyed while the route answers "nothing changed". Phase 2 §2 re-resolves
+--   the date on the restore path, and Phase 2 §7 stops `createMedication`
+--   reporting the same refusal as a successful create. Neither fix is in this
+--   migration, and the window between this push and their deploy is real —
+--   production runs S-04's code against the tightened predicate in the meantime.
+--
+-- NOTHING ASSERTS THIS POLICY. `context/foundation/lessons.md` → _State table
+--   privileges in the migration_ says a rule nothing asserts is a rule that can
+--   silently regress, and its incident cost a fall from 57/57 to 14/57 on a
+--   routine CLI bump. This slice knowingly departs from that lesson: it adds no
+--   pgTAP assertion for this predicate. The departure is named here rather than
+--   left to be discovered, and the specification the eventual test slice should
+--   inherit is written down in
+--   `context/changes/mid-supply-dosage-change/follow-ups/deferred-tests.md`.
+--   Four fixtures in supabase/tests/constraints.test.sql DO change in this
+--   phase — they insert past-dated rows below that file's `set local role
+--   authenticated` and abort under the new predicate. That is fixture repair
+--   forced by this migration, not new coverage.
+--
+-- Behaviour only: no table, column, type, grant, or other policy is touched, so
+-- `npm run db:types` is not part of this change and src/db/database.types.ts
+-- must not move. Safe against a populated database — tightening a `with check`
+-- affects future INSERTs only, existing rows are untouched, and there are no
+-- back-dated rows in production because no surface has ever been able to write
+-- one.
+--
+-- ROLLBACK: restore the ownership-only predicate —
+--   `with check ((select auth.uid()) = user_id)`. Neither direction destroys
+--   data. Rolling this back while S-05's routes remain deployed reopens the
+--   back-dating hole; the two are a pair and the deploy order is this first.
+
+alter policy dosage_changes_insert_own on public.dosage_changes
+  with check ((select auth.uid()) = user_id and effective_date >= current_date);

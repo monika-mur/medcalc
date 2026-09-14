@@ -407,8 +407,14 @@ route can answer 400 with a field error rather than an unexplained 500. Log it (
 _Log the database error before collapsing it to a domain kind_): reaching it means either a
 raw request or the two-clock midnight window, and both are worth a trace.
 
-Also return whether the DELETE removed anything, so the caller can distinguish "scheduled"
-from "replaced" in its success message.
+An earlier draft also had `setDosage` return whether the DELETE removed anything, so the caller
+could distinguish "scheduled" from "replaced" in its success message. **Dropped during
+implementation, deliberately.** The island already knows which case it is: it distinguishes
+scheduled from immediate by `effectiveDate !== undefined`, and the replace case is reached only
+through an explicit confirm dialog that has already named both the existing value and the
+replacement. A server-side flag would have arrived with no consumer — the same "no second copy
+without a consumer" reasoning this plan applies at §4 to the soonest-change field
+(plan-review F10). Amended after impl-review F4 found the plan text still specifying it.
 
 #### 3. Cancel a pending change
 
@@ -438,11 +444,27 @@ the next reader does not "tighten" it into a bug. Raised in plan-review as F7.
 and expose the scheduled changes the UI must name.
 
 **Contract**: `MedicationStatus` gains `not_started`. `deriveStatus` currently takes
-`dosageCount`; it needs enough to tell "every row is future-dated" from "a row in force says
-0", so pass the dosage rows — or a boolean precomputed in `toView` — rather than only the
-count. Precedence: after `no_dosage` and before `not_used`, because a medication with no row
-in force yet has no dosage today either way, and "has one scheduled" is the more specific
-answer.
+`dosageCount`; it needs enough to tell a dosage that has not begun from one the user stopped,
+so pass the dosage rows — or a boolean precomputed in `toView` — rather than only the count.
+Precedence: after `no_dosage` and before `not_used`, because a medication with no row in force
+yet has no dosage today either way, and "has one scheduled" is the more specific answer.
+
+**The trigger is value-gated, not shape-gated, and that is the shipped contract.** An earlier
+draft of this paragraph specified it as "every dosage row is future-dated" versus "a row in
+force says 0". That is too narrow, and Phase 4's manual step 4.7 proved it: a medication created
+at 0/day with the real dose scheduled for later — an ordinary thing to do through the create
+form, since 0 is a legal dosage there — has a row in force, so it failed the "every row is
+future-dated" test and read **"Stopped"**. The rule that shipped is
+`currentDosage === 0 && hasNonzeroPending`: nothing in force today, and a _nonzero_ row pending.
+Gating on the value is what keeps a second pending 0/day row — a user re-confirming a stop —
+reading as `not_used` rather than as a dosage about to begin. It also means the state is
+reachable through the panel, which the plan elsewhere says it is not; that note stands only for
+the narrower trigger. For the same reason, any consumer naming the start date must find the
+first **nonzero** pending row rather than the soonest one, since a stop-then-resume series can
+carry a 0/day row ahead of the real one. Recorded in `change.md`'s session log under the
+2026-09-13 entry; amended here after impl-review F5 found the plan still naming the superseded
+trigger. This slice ships no automated tests, so this paragraph is the specification the
+eventual test slice inherits.
 
 `MedicationView` gains the pending changes — rows with `effective_date > today` — sorted
 ascending. **One field, not two**: an earlier draft added the soonest change alongside the
@@ -852,72 +874,72 @@ backstop is live — see Phase 1 §3.
 
 #### Automated
 
-- [ ] 1.1 `ci/migration-drift-check` merged to `master`, so `scripts/check-migration-drift.mjs` exists before the push
-- [ ] 1.2 `npm run db:reset` applies all migrations cleanly from scratch
-- [ ] 1.3 `npm run db:test` green with the repaired fixtures, same assertion count; the two repaired `throws_ok` still fail for `23505` and `23514`, not `42501`
-- [ ] 1.4 `npx supabase migration list` shows the new migration in the remote column
-- [ ] 1.5 `npm run lint` clean, `npm run typecheck` clean
+- [x] 1.1 `ci/migration-drift-check` merged to `master`, so `scripts/check-migration-drift.mjs` exists before the push — 578ad56
+- [x] 1.2 `npm run db:reset` applies all migrations cleanly from scratch — 578ad56
+- [x] 1.3 `npm run db:test` green with the repaired fixtures, same assertion count; the two repaired `throws_ok` still fail for `23505` and `23514`, not `42501` — 578ad56
+- [x] 1.4 `npx supabase migration list` shows the new migration in the remote column — 578ad56
+- [x] 1.5 `npm run lint` clean, `npm run typecheck` clean — 578ad56
 
 #### Manual
 
-- [ ] 1.6 Studio: INSERT with `effective_date = current_date - 1` refused; `current_date` and `current_date + 7` succeed
-- [ ] 1.7 Creating a medication through `/medications` still succeeds and shows its dosage
-- [ ] 1.8 Changing today's dosage on an existing medication still works
+- [x] 1.6 Studio: INSERT with `effective_date = current_date - 1` refused; `current_date` and `current_date + 7` succeed — 578ad56
+- [x] 1.7 Creating a medication through `/medications` still succeeds and shows its dosage — 578ad56
+- [x] 1.8 Changing today's dosage on an existing medication still works — 578ad56
 
 ### Phase 2: The date through the domain layer and the API
 
 #### Automated
 
-- [ ] 2.1 `npm run typecheck` clean — fails on `MedicationsManager.tsx:70` and `:78` only; it does not reach `dashboard.ts` or `SupplyCard.astro`
-- [ ] 2.2 `npm run lint` clean at 0 errors, 0 warnings
-- [ ] 2.3 `npm run build` succeeds (dev server stopped first)
-- [ ] 2.4 Existing pgTAP suite still green: `npm run db:test`
+- [x] 2.1 `npm run typecheck` clean — fails on `MedicationsManager.tsx:70` and `:78` only; it does not reach `dashboard.ts` or `SupplyCard.astro` — c155dc3
+- [x] 2.2 `npm run lint` clean at 0 errors, 0 warnings — c155dc3
+- [x] 2.3 `npm run build` succeeds (dev server stopped first) — c155dc3
+- [x] 2.4 Existing pgTAP suite still green: `npm run db:test` — c155dc3
 
 #### Manual
 
-- [ ] 2.5 POST with a future `effective_date` returns 200 and a segmentally-correct `supply_end_date`
-- [ ] 2.6 POST with a past date returns 400 with `fieldErrors.effective_date`, not 500
-- [ ] 2.7 POST with no `effective_date` behaves exactly as before
-- [ ] 2.8 DELETE removes a pending row and restores the supply-end date; unknown date returns 404
-- [ ] 2.9 DELETE for a past date returns 404 (zero-rows check present)
-- [ ] 2.10 DELETE for today's date removes the in-force row and succeeds (deliberate absence of a floor)
-- [ ] 2.11 A medication whose only dosage row is future-dated reports `status: "not_started"`
-- [ ] 2.12 Creating a medication through `/medications` still succeeds and shows its dosage (§7 must not change the ordinary case)
+- [x] 2.5 POST with a future `effective_date` returns 200 and a segmentally-correct `supply_end_date` — c155dc3
+- [x] 2.6 POST with a past date returns 400 with `fieldErrors.effective_date`, not 500 — c155dc3
+- [x] 2.7 POST with no `effective_date` behaves exactly as before — c155dc3
+- [x] 2.8 DELETE removes a pending row and restores the supply-end date; unknown date returns 404 — c155dc3
+- [x] 2.9 DELETE for a past date returns 404 (zero-rows check present) — c155dc3
+- [x] 2.10 DELETE for today's date removes the in-force row and succeeds (deliberate absence of a floor) — c155dc3
+- [x] 2.11 A medication whose only dosage row is future-dated reports `status: "not_started"` — c155dc3
+- [x] 2.12 Creating a medication through `/medications` still succeeds and shows its dosage (§7 must not change the ordinary case) — c155dc3
 
 ### Phase 3: Schedule, list and cancel on `/medications`
 
 #### Automated
 
-- [ ] 3.1 `npm run typecheck` clean
-- [ ] 3.2 `npm run lint` clean at 0 errors, 0 warnings
-- [ ] 3.3 `npm run build` succeeds (dev server stopped first)
+- [x] 3.1 `npm run typecheck` clean — c854df0
+- [x] 3.2 `npm run lint` clean at 0 errors, 0 warnings — c854df0
+- [x] 3.3 `npm run build` succeeds (dev server stopped first) — c854df0
 
 #### Manual
 
-- [ ] 3.4 Scheduling a future change succeeds; the panel lists it and the row updates without reload
-- [ ] 3.5 Choosing today still replaces today's dosage with no confirmation dialog
-- [ ] 3.6 A collision opens the confirm naming both values; cancel keeps the original, confirm replaces
-- [ ] 3.7 Cancel on a pending row removes it and the figures revert
-- [ ] 3.8 The date picker will not offer yesterday
-- [ ] 3.9 A not-yet-started medication reads "Starts &lt;date&gt;", never "Not used"
-- [ ] 3.10 "Stop taking this" with a future date schedules a stop rather than stopping now
-- [ ] 3.11 The panel is usable at 320px with no horizontal scroll
-- [ ] 3.12 Keyboard: date field, cancel buttons and confirm dialog reachable; dialog returns focus
+- [x] 3.4 Scheduling a future change succeeds; the panel lists it and the row updates without reload — c854df0
+- [x] 3.5 Choosing today still replaces today's dosage with no confirmation dialog — c854df0
+- [x] 3.6 A collision opens the confirm naming both values; cancel keeps the original, confirm replaces — c854df0
+- [x] 3.7 Cancel on a pending row removes it and the figures revert — c854df0
+- [x] 3.8 The date picker will not offer yesterday — c854df0
+- [x] 3.9 A not-yet-started medication reads "Starts &lt;date&gt;", never "Not used" — c854df0
+- [x] 3.10 "Stop taking this" with a future date schedules a stop rather than stopping now — c854df0
+- [x] 3.11 The panel is usable at 320px with no horizontal scroll — c854df0
+- [x] 3.12 Keyboard: date field, cancel buttons and confirm dialog reachable; dialog returns focus — c854df0
 
 ### Phase 4: Surface the change on `/dashboard`
 
 #### Automated
 
-- [ ] 4.1 `npm run typecheck` clean
-- [ ] 4.2 `npm run lint` clean at 0 errors, 0 warnings
-- [ ] 4.3 `npm run build` succeeds (dev server stopped first)
-- [ ] 4.4 `npm run db:test` still green
+- [x] 4.1 `npm run typecheck` clean — 859ee16
+- [x] 4.2 `npm run lint` clean at 0 errors, 0 warnings — 859ee16
+- [x] 4.3 `npm run build` succeeds (dev server stopped first) — 859ee16
+- [x] 4.4 `npm run db:test` still green — 859ee16
 
 #### Manual
 
-- [ ] 4.5 The end-to-end north-star walk: the scheduled change moves the supply-end date to the segmentally-correct day and reclassifies the status
-- [ ] 4.6 Cancelling returns the dashboard's date to its original value exactly
-- [ ] 4.7 A not-started medication's reason line names the start date, never "Dosage is set to 0", and it keeps the supply band its figures earn — one that runs out before the next visit reads "Order now"
-- [ ] 4.8 A medication with no scheduled change shows no extra line
-- [ ] 4.9 Group and card ordering unchanged for medications without scheduled changes
-- [ ] 4.10 Dashboard renders at 320px with no horizontal scroll, within a second for ~20 medications
+- [x] 4.5 The end-to-end north-star walk: the scheduled change moves the supply-end date to the segmentally-correct day and reclassifies the status — 859ee16
+- [x] 4.6 Cancelling returns the dashboard's date to its original value exactly — 859ee16
+- [x] 4.7 A not-started medication's reason line names the start date, never "Dosage is set to 0", and it keeps the supply band its figures earn — one that runs out before the next visit reads "Order now" — 859ee16
+- [x] 4.8 A medication with no scheduled change shows no extra line — 859ee16
+- [x] 4.9 Group and card ordering unchanged for medications without scheduled changes — 859ee16
+- [x] 4.10 Dashboard renders at 320px with no horizontal scroll, within a second for ~20 medications — 859ee16

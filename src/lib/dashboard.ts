@@ -57,6 +57,27 @@ export function nextVisitFor(visits: Visit[], specialistId: string, today: strin
   return soonest;
 }
 
+/**
+ * **Exhaustive on purpose.** This used to end in a `default:` that fell through
+ * to `classifySupplyStatus`, which meant a new `MedicationStatus` variant got a
+ * card state silently rather than failing the build — and since `CardState` is
+ * structurally independent of `MedicationStatus`, nothing else in the tree would
+ * have caught it either. That is how S-04 handed a defect to S-05: `not_started`
+ * would have rendered as whatever the fall-through produced, with no compiler
+ * error anywhere. The `never` assignment below is the guard; adding a variant
+ * now stops the build here.
+ *
+ * **`not_started` deliberately joins `active` rather than getting a quiet state
+ * of its own.** The tempting move is to treat "nobody is consuming this yet"
+ * like `not_used` → `stopped`, but the engine disagrees and it is right to:
+ * with stock on hand and a dosage effective in a week, the zero-dose branch
+ * consumes nothing across the first span, the walk reaches the breakpoint and
+ * returns a real `supplyEndDate`. A quiet card would throw that answer away, so
+ * a medication that runs out before the next visit would read neutral — the
+ * "you have enough" over-report the PRD names as a product failure. `not_used`
+ * is different because its consumption is zero indefinitely; here it starts on
+ * a known date.
+ */
 function cardStateFor(medication: MedicationView, nextVisitDate: string | null): CardState {
   switch (medication.status) {
     case "no_dosage":
@@ -65,8 +86,16 @@ function cardStateFor(medication: MedicationView, nextVisitDate: string | null):
       return "stopped";
     case "out_of_stock":
       return "out_of_stock";
-    default:
+    // `archived` never reaches here — `buildDashboard` filters it out before
+    // calling — but the switch has to be total for the guard below to work.
+    case "active":
+    case "not_started":
+    case "archived":
       return classifySupplyStatus(medication.supply_end_date, nextVisitDate);
+    default: {
+      const unhandled: never = medication.status;
+      throw new Error(`Unhandled medication status: ${String(unhandled)}`);
+    }
   }
 }
 
