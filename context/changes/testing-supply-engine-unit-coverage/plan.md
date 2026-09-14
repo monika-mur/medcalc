@@ -399,28 +399,28 @@ No data migration. Two production files change visibility only (one function ext
 
 #### Automated
 
-- [x] 3.1 Unit suite passes: `npm run test:unit`
-- [x] 3.2 Type checking passes: `npm run typecheck`
-- [x] 3.3 Linting passes at zero warnings: `npm run lint`
+- [x] 3.1 Unit suite passes: `npm run test:unit` — 442d375
+- [x] 3.2 Type checking passes: `npm run typecheck` — 442d375
+- [x] 3.3 Linting passes at zero warnings: `npm run lint` — 442d375
 
 #### Manual
 
-- [x] 3.4 Hand-verify the corrected `2026-09-23` and the derived `2026-09-25` on paper, independently of the engine
-- [x] 3.5 Temporarily invert the classifier's `<=` to `<`, confirm the equality test goes red, revert
+- [x] 3.4 Hand-verify the corrected `2026-09-23` and the derived `2026-09-25` on paper, independently of the engine — 442d375
+- [x] 3.5 Temporarily invert the classifier's `<=` to `<`, confirm the equality test goes red, revert — 442d375
 
 ### Phase 4: Status derivation and dashboard assembly
 
 #### Automated
 
-- [ ] 4.1 Unit suite passes: `npm run test:unit`
-- [ ] 4.2 Full suite passes: `npm test`
-- [ ] 4.3 Type checking passes: `npm run typecheck`
-- [ ] 4.4 Linting passes at zero warnings: `npm run lint`
+- [x] 4.1 Unit suite passes: `npm run test:unit`
+- [x] 4.2 Full suite passes: `npm test`
+- [x] 4.3 Type checking passes: `npm run typecheck`
+- [x] 4.4 Linting passes at zero warnings: `npm run lint`
 
 #### Manual
 
-- [ ] 4.5 A medication at dosage 0 today with a nonzero change scheduled ahead shows `not_started` in the running app
-- [ ] 4.6 The dashboard's visible group order for two specialists matches what `dashboard.test.ts` asserts
+- [x] 4.5 A medication at dosage 0 today with a nonzero change scheduled ahead shows `not_started` in the running app
+- [x] 4.6 The dashboard's visible group order for two specialists matches what `dashboard.test.ts` asserts
 
 ### Phase 5: Close-out — spec corrections and cookbook
 
