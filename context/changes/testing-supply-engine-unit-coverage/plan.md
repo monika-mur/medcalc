@@ -386,27 +386,27 @@ No data migration. Two production files change visibility only (one function ext
 
 #### Automated
 
-- [x] 2.1 Unit suite passes: `npm run test:unit`
-- [x] 2.2 Type checking passes: `npm run typecheck`
-- [x] 2.3 Linting passes at zero warnings: `npm run lint`
+- [x] 2.1 Unit suite passes: `npm run test:unit` — ee15470
+- [x] 2.2 Type checking passes: `npm run typecheck` — ee15470
+- [x] 2.3 Linting passes at zero warnings: `npm run lint` — ee15470
 
 #### Manual
 
-- [x] 2.4 Spot-check three expected values in `dates.test.ts` by hand against a calendar
-- [x] 2.5 Temporarily break one guard in `decimal.ts`, confirm the expected test goes red, revert
+- [x] 2.4 Spot-check three expected values in `dates.test.ts` by hand against a calendar — ee15470
+- [x] 2.5 Temporarily break one guard in `decimal.ts`, confirm the expected test goes red, revert — ee15470
 
 ### Phase 3: The supply engine
 
 #### Automated
 
-- [ ] 3.1 Unit suite passes: `npm run test:unit`
-- [ ] 3.2 Type checking passes: `npm run typecheck`
-- [ ] 3.3 Linting passes at zero warnings: `npm run lint`
+- [x] 3.1 Unit suite passes: `npm run test:unit`
+- [x] 3.2 Type checking passes: `npm run typecheck`
+- [x] 3.3 Linting passes at zero warnings: `npm run lint`
 
 #### Manual
 
-- [ ] 3.4 Hand-verify the corrected `2026-09-23` and the derived `2026-09-25` on paper, independently of the engine
-- [ ] 3.5 Temporarily invert the classifier's `<=` to `<`, confirm the equality test goes red, revert
+- [x] 3.4 Hand-verify the corrected `2026-09-23` and the derived `2026-09-25` on paper, independently of the engine
+- [x] 3.5 Temporarily invert the classifier's `<=` to `<`, confirm the equality test goes red, revert
 
 ### Phase 4: Status derivation and dashboard assembly
 
