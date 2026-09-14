@@ -6,7 +6,7 @@
 >
 > Refresh: re-run `/10x-test-plan --refresh` when stale (see §8).
 >
-> Last updated: 2026-09-14
+> Last updated: 2026-09-15
 
 ## 1. Strategy
 
@@ -75,12 +75,12 @@ Each row is a discrete rollout phase that will open its own change folder
 via `/10x-new`. Status moves left-to-right through the values below; the
 orchestrator updates Status as artifacts appear on disk.
 
-| #   | Phase name                                  | Goal (one line)                                                                                                           | Risks covered | Test types         | Status        | Change folder                                          |
-| --- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------- | ------------------ | ------------- | ------------------------------------------------------ |
-| 1   | Supply-engine unit coverage                 | Prove the arithmetic the PRD guards hardest is correct, at the cheapest layer, before anything else is built on top of it | #1, #2        | unit               | change opened | `context/changes/testing-supply-engine-unit-coverage/` |
-| 2   | Medications write-path integration coverage | Catch partial-write and zero-rows-as-success failures on the repo's most-churned, least-covered surface                   | #4, #5, #6    | integration        | not started   | —                                                      |
-| 3   | Migration and policy drift guards           | Make schema drift and RLS-policy loosening fail loudly instead of silently                                                | #3, #7        | integration, pgTAP | not started   | —                                                      |
-| 4   | Quality-gates wiring                        | Wire the existing (and newly written) suites into CI so a green check means the behavior was actually exercised           | cross-cutting | gates              | not started   | —                                                      |
+| #   | Phase name                                  | Goal (one line)                                                                                                           | Risks covered | Test types         | Status      | Change folder                                          |
+| --- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------- | ------------------ | ----------- | ------------------------------------------------------ |
+| 1   | Supply-engine unit coverage                 | Prove the arithmetic the PRD guards hardest is correct, at the cheapest layer, before anything else is built on top of it | #1, #2        | unit               | complete    | `context/changes/testing-supply-engine-unit-coverage/` |
+| 2   | Medications write-path integration coverage | Catch partial-write and zero-rows-as-success failures on the repo's most-churned, least-covered surface                   | #4, #5, #6    | integration        | not started | —                                                      |
+| 3   | Migration and policy drift guards           | Make schema drift and RLS-policy loosening fail loudly instead of silently                                                | #3, #7        | integration, pgTAP | not started | —                                                      |
+| 4   | Quality-gates wiring                        | Wire the existing (and newly written) suites into CI so a green check means the behavior was actually exercised           | cross-cutting | gates              | not started | —                                                      |
 
 **Status vocabulary** (fixed): `not started` → `change opened` → `researched`
 → `planned` → `implementing` → `complete`.
@@ -90,14 +90,14 @@ orchestrator updates Status as artifacts appear on disk.
 The classic test base for this project. AI-native tools (if any) carry a
 `checked:` date so future readers can see which lines need re-verification.
 
-| Layer                | Tool                                              | Version                      | Notes                                                                                                                                                                                     |
-| -------------------- | ------------------------------------------------- | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| unit + integration   | Vitest                                            | 4.1.10                       | Configured (`vitest.config.ts`); one integration file exists (`tests/integration/schema.test.ts`, schema-level only). `npm test` requires a running local Supabase stack.                 |
-| database invariants  | pgTAP                                             | n/a (via `supabase test db`) | 4 files, 709 lines, all at the schema/RLS layer (`supabase/tests/`). `npm run db:test`.                                                                                                   |
-| API mocking          | none configured                                   | —                            | Not yet needed — integration tests run against a real local Supabase stack per project convention, not a mocked network edge.                                                             |
-| e2e                  | none                                              | —                            | No Playwright or equivalent installed. Not recommended for this rollout — the PRD's critical paths (dashboard calculation, CRUD) are cheaper to prove at unit/integration layers; see §7. |
-| accessibility        | none                                              | —                            | Not in scope for this rollout; NFR is mobile-viewport usability, not covered by any risk in §2.                                                                                           |
-| (optional) AI-native | none available this session — checked: 2026-09-14 | n/a                          | No post-edit hook or vision-review tooling configured; not proposed as a rollout phase (no risk in §2 needs it more cheaply than unit/integration would provide it).                      |
+| Layer                | Tool                                              | Version                      | Notes                                                                                                                                                                                                                               |
+| -------------------- | ------------------------------------------------- | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| unit + integration   | Vitest                                            | 4.1.10                       | Configured (`vitest.config.ts`) as two projects: `unit` (no stack needed, `npm run test:unit`) and `integration` (needs a running local Supabase stack, `npm run test:integration`). §3 Phase 1 populated `tests/unit/` — see §6.1. |
+| database invariants  | pgTAP                                             | n/a (via `supabase test db`) | 4 files, 709 lines, all at the schema/RLS layer (`supabase/tests/`). `npm run db:test`.                                                                                                                                             |
+| API mocking          | none configured                                   | —                            | Not yet needed — integration tests run against a real local Supabase stack per project convention, not a mocked network edge.                                                                                                       |
+| e2e                  | none                                              | —                            | No Playwright or equivalent installed. Not recommended for this rollout — the PRD's critical paths (dashboard calculation, CRUD) are cheaper to prove at unit/integration layers; see §7.                                           |
+| accessibility        | none                                              | —                            | Not in scope for this rollout; NFR is mobile-viewport usability, not covered by any risk in §2.                                                                                                                                     |
+| (optional) AI-native | none available this session — checked: 2026-09-14 | n/a                          | No post-edit hook or vision-review tooling configured; not proposed as a rollout phase (no risk in §2 needs it more cheaply than unit/integration would provide it).                                                                |
 
 **Stack grounding tools (current session):**
 
@@ -129,8 +129,30 @@ the relevant rollout phase ships; before that, the sub-section reads
 
 ### 6.1 Adding a unit test
 
-- TBD — see §3 Phase 1 for the supply-engine unit-test pattern (`computeSupply`,
-  `deriveStatus`, `addDays`/`daysBetween`, `floorDivide`/`subtractExact`/`clampScale`).
+- **Location**: `tests/unit/`. Not co-located with source — this repo keeps
+  both test suites in dedicated directories (`tests/integration/`,
+  `supabase/tests/`), and the unit suite follows the same convention.
+- **Naming**: `<module>.test.ts`, one file per `src/lib/` module under test
+  (e.g. `tests/unit/supply.test.ts` for `src/lib/supply.ts`).
+- **Runs without a stack**: the `unit` Vitest project (`vitest.config.ts`) is
+  `environment: "node"` with no Supabase dependency — a pure function needs no
+  fixture, no auth, no running containers. If what you're testing reads a
+  database or calls `fetch`, it belongs in §6.2 (integration), not here.
+- **If the function you need is module-private**: either add `export` in
+  place, or extract it to a new pure module if it currently lives inside a
+  React component (importing a `.tsx` file into a `node`-environment test
+  drags in React and its whole dependency graph for no reason). See
+  `src/lib/notices.ts` for the extraction shape.
+- **Reference test**: `tests/unit/supply.test.ts` — house style is explicit
+  `vitest` imports (no globals), `describe` blocks as domain phrases, and `it`
+  titles that state the _reasoning_ for any assertion that could plausibly be
+  "corrected" by a future reader (e.g. "colours a supply ending EXACTLY on the
+  visit date red, not yellow — the bands partition on days of cover AFTER the
+  visit..."). Also worth reading: `tests/unit/decimal.test.ts` for the pattern
+  of naming the specific float pair that raw JS arithmetic gets wrong.
+- **Run locally**: `npm run test:unit` (this project only, no stack needed) or
+  `npm test` (both projects; needs `npx supabase start` first for the
+  integration half).
 
 ### 6.2 Adding an integration test
 
@@ -151,7 +173,19 @@ the relevant rollout phase ships; before that, the sub-section reads
 
 ### 6.6 Per-rollout-phase notes
 
-(Filled in as each phase lands.)
+- **Phase 1 (2026-09-15)**: two functions needed a visibility change before
+  they were testable — `discrepancyPhrase` (module-private inside a React
+  island) and `deriveStatus` (module-private in a data module). Neither needed
+  redesign, only exposure; see §6.1's note on this. The Vitest `projects` split
+  requires `extends: true` on every project entry or it silently fails to
+  inherit the root `@` alias, which then reads as a missing-file error rather
+  than a config error — confirmed against Vitest 4.1.10's own type
+  definitions, not assumed. Two prior deferred-test specifications
+  (`mid-supply-dosage-change/follow-ups/deferred-tests.md`,
+  `supply-status-dashboard/follow-ups/supply-engine-tests.md`) contained a
+  wrong worked-example date and a superseded status-precedence row; both were
+  corrected at source rather than silently worked around, so a future reader
+  of those files sees the same correction this phase made.
 
 ## 7. What We Deliberately Don't Test
 

@@ -412,26 +412,26 @@ No data migration. Two production files change visibility only (one function ext
 
 #### Automated
 
-- [x] 4.1 Unit suite passes: `npm run test:unit`
-- [x] 4.2 Full suite passes: `npm test`
-- [x] 4.3 Type checking passes: `npm run typecheck`
-- [x] 4.4 Linting passes at zero warnings: `npm run lint`
+- [x] 4.1 Unit suite passes: `npm run test:unit` — c0331b2
+- [x] 4.2 Full suite passes: `npm test` — c0331b2
+- [x] 4.3 Type checking passes: `npm run typecheck` — c0331b2
+- [x] 4.4 Linting passes at zero warnings: `npm run lint` — c0331b2
 
 #### Manual
 
-- [x] 4.5 A medication at dosage 0 today with a nonzero change scheduled ahead shows `not_started` in the running app
-- [x] 4.6 The dashboard's visible group order for two specialists matches what `dashboard.test.ts` asserts
+- [x] 4.5 A medication at dosage 0 today with a nonzero change scheduled ahead shows `not_started` in the running app — c0331b2
+- [x] 4.6 The dashboard's visible group order for two specialists matches what `dashboard.test.ts` asserts — c0331b2
 
 ### Phase 5: Close-out — spec corrections and cookbook
 
 #### Automated
 
-- [ ] 5.1 Full suite passes: `npm test`
-- [ ] 5.2 Type checking passes: `npm run typecheck`
-- [ ] 5.3 Linting passes at zero warnings: `npm run lint`
-- [ ] 5.4 Formatting is clean: `npm run format`
+- [x] 5.1 Full suite passes: `npm test`
+- [x] 5.2 Type checking passes: `npm run typecheck`
+- [x] 5.3 Linting passes at zero warnings: `npm run lint`
+- [x] 5.4 Formatting is clean: `npm run format`
 
 #### Manual
 
-- [ ] 5.5 A fresh agent session, given the project rules and `test-plan.md`, names `tests/unit/` and the command unprompted
-- [ ] 5.6 Both corrected follow-up files read as corrections, not rewrites of the original reasoning
+- [x] 5.5 A fresh agent session, given the project rules and `test-plan.md`, names `tests/unit/` and the command unprompted
+- [x] 5.6 Both corrected follow-up files read as corrections, not rewrites of the original reasoning

@@ -74,10 +74,12 @@ Wrangler reads `.dev.vars` (not `.env`) for runtime secrets during `npm run dev`
 
 ## Testing
 
-- `npm test` — Vitest integration tests (`tests/integration/`). **Requires a running local Supabase stack** (`npx supabase start`); the helper refuses to run against a non-local `SUPABASE_URL`, because these tests sign up users and write rows.
+- `npm run test:unit` — Vitest unit tests (`tests/unit/`), pure functions only. **No stack needed** — runs in a plain `node` environment with no Supabase dependency, so it works with Docker fully stopped.
+- `npm run test:integration` — Vitest integration tests (`tests/integration/`). **Requires a running local Supabase stack** (`npx supabase start`); the helper refuses to run against a non-local `SUPABASE_URL`, because these tests sign up users and write rows.
+- `npm test` runs both projects (`vitest.config.ts` defines them via `test.projects`).
 - `npm run db:test` — pgTAP database tests (`supabase/tests/`), run by `supabase test db` against the local database.
-- Database-level invariants (RLS, CHECK, FK, uniqueness) belong in `supabase/tests/`. Behaviour on the client path — anything that goes through PostgREST or `@supabase/supabase-js` — belongs in `tests/integration/`.
-- Both layers earn their keep: pgTAP catches a broken constraint, the integration suite catches a policy targeting the wrong role. A `check ((x = 'a') = (p and q))`-shaped constraint passed pgTAP and was caught by the integration suite; write presence constraints as `CASE`, and assert the partially-populated case in both.
+- Three buckets, by what the code under test touches: database-level invariants (RLS, CHECK, FK, uniqueness) belong in `supabase/tests/`; behaviour on the client path — anything that goes through PostgREST or `@supabase/supabase-js` — belongs in `tests/integration/`; a pure function with no I/O and no clock read of its own belongs in `tests/unit/` (see `context/foundation/test-plan.md` §6.1 for the pattern).
+- Both database/client layers earn their keep: pgTAP catches a broken constraint, the integration suite catches a policy targeting the wrong role. A `check ((x = 'a') = (p and q))`-shaped constraint passed pgTAP and was caught by the integration suite; write presence constraints as `CASE`, and assert the partially-populated case in both.
 - **Every worktree shares one local stack, so `db:reset` is the exclusive claim on it.** `config.toml` pins `project_id` and fixed ports, and `supabase db reset` re-applies migrations from the _invoking_ worktree only — resetting from one worktree removes the other's schema, not just its rows. Run `npm run db:reset` from your own worktree immediately before `npm test`, `npm run db:test`, or `npm run db:types`, and never run `db:types` against a database another worktree reset — it writes the other slice's tables into this branch's committed `database.types.ts`. Code edits, `npm run dev`, lint and build need no claim.
 
 ## Domain schema
