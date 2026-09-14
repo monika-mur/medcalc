@@ -371,29 +371,29 @@ No data migration. Two production files change visibility only (one function ext
 
 #### Automated
 
-- [x] 1.1 Unit project runs with the Supabase stack stopped: `npm run test:unit`
-- [x] 1.2 Integration project is still collected and passes with the stack running: `npm run test:integration`
-- [x] 1.3 Both run together: `npm test`
-- [x] 1.4 Type checking passes: `npm run typecheck`
-- [x] 1.5 Linting passes at zero warnings: `npm run lint`
+- [x] 1.1 Unit project runs with the Supabase stack stopped: `npm run test:unit` — adc464e
+- [x] 1.2 Integration project is still collected and passes with the stack running: `npm run test:integration` — adc464e
+- [x] 1.3 Both run together: `npm test` — adc464e
+- [x] 1.4 Type checking passes: `npm run typecheck` — adc464e
+- [x] 1.5 Linting passes at zero warnings: `npm run lint` — adc464e
 
 #### Manual
 
-- [ ] 1.6 Medications page renders and a count correction shows the correct discrepancy notice in a browser
-- [ ] 1.7 `npm run test:unit` completes in under ~2 seconds with Docker fully stopped
+- [x] 1.6 Medications page renders and a count correction shows the correct discrepancy notice in a browser — adc464e
+- [x] 1.7 `npm run test:unit` completes in under ~2 seconds with Docker fully stopped — adc464e
 
 ### Phase 2: Arithmetic primitives
 
 #### Automated
 
-- [ ] 2.1 Unit suite passes: `npm run test:unit`
-- [ ] 2.2 Type checking passes: `npm run typecheck`
-- [ ] 2.3 Linting passes at zero warnings: `npm run lint`
+- [x] 2.1 Unit suite passes: `npm run test:unit`
+- [x] 2.2 Type checking passes: `npm run typecheck`
+- [x] 2.3 Linting passes at zero warnings: `npm run lint`
 
 #### Manual
 
-- [ ] 2.4 Spot-check three expected values in `dates.test.ts` by hand against a calendar
-- [ ] 2.5 Temporarily break one guard in `decimal.ts`, confirm the expected test goes red, revert
+- [x] 2.4 Spot-check three expected values in `dates.test.ts` by hand against a calendar
+- [x] 2.5 Temporarily break one guard in `decimal.ts`, confirm the expected test goes red, revert
 
 ### Phase 3: The supply engine
 
