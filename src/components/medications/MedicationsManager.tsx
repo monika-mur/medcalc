@@ -18,7 +18,7 @@ import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import type { ApiErrorBody } from "@/lib/api/json";
 import { zodFieldErrors } from "@/lib/api/json";
-import type { MedicationStatus, MedicationView } from "@/lib/db/medications";
+import { nextNonzeroPendingChange, type MedicationStatus, type MedicationView } from "@/lib/db/medications";
 import type { SpecialistWithUsage } from "@/lib/db/specialists";
 import { subtractExact } from "@/lib/decimal";
 import {
@@ -194,6 +194,12 @@ export default function MedicationsManager({ initialMedications, specialists, lo
   // Seeded from the `utcToday` prop whenever the panel opens, never from a
   // clock in here — `CLAUDE.md` → _Dates_.
   const [dosageDate, setDosageDate] = useState(utcToday);
+  // Whether the user has actually chosen a date this time the panel was opened.
+  // This, and NOT a comparison against `utcToday`, is what "the field was left
+  // alone" means: `utcToday` is a prop frozen at page render, so on a tab left
+  // open across UTC midnight the seeded value silently becomes a past date, and
+  // equality against it stops answering the question being asked.
+  const [dosageDateTouched, setDosageDateTouched] = useState(false);
   const [refillValue, setRefillValue] = useState("");
   const [countedValue, setCountedValue] = useState("");
   /**
@@ -285,6 +291,7 @@ export default function MedicationsManager({ initialMedications, specialists, lo
     } else if (kind === "dosage") {
       setDosageValue(String(medication.current_dosage));
       setDosageDate(utcToday);
+      setDosageDateTouched(false);
     } else if (kind === "refill") {
       setRefillValue("");
     } else {
@@ -350,14 +357,18 @@ export default function MedicationsManager({ initialMedications, specialists, lo
    * the row stays on the list saying so.
    */
   /**
-   * `effectiveDate` is `undefined` when the user left the field at today.
+   * `effectiveDate` is `undefined` when the user did not choose a date — either
+   * they left the field alone, or they deliberately picked today.
    *
-   * **Omitting it is not the same as sending today, and the difference is
-   * deliberate.** `setDosage` only runs its two-clock compensating retry for a
-   * server-derived date — a client-supplied one the policy refuses must not be
-   * silently relocated to another day. Sending `utcToday` explicitly on every
-   * ordinary dosage change would opt the common path out of that protection for
-   * no gain, since the server derives the identical date anyway.
+   * **Omitting it is still not the same as sending today.** An earlier version
+   * of this note justified that by `setDosage` running its two-clock
+   * compensating retry only for a server-derived date; that gate is gone
+   * (impl-review F1) precisely because this page cannot reliably signal
+   * "server-derived" across a UTC midnight. The reason that remains is simpler
+   * and does not depend on the server's internals: a date sent explicitly is
+   * floored against `utcToday`, and `utcToday` is frozen at page render. Letting
+   * the server derive the day it is actually going to compare against is the
+   * only version that cannot go stale in a long-lived tab.
    */
   async function submitDosage(id: string, dailyDosage: number, effectiveDate: string | undefined) {
     const scheduled = effectiveDate !== undefined;
@@ -395,9 +406,15 @@ export default function MedicationsManager({ initialMedications, specialists, lo
   function requestDosage(medication: MedicationView, dailyDosage: number) {
     // Built from the same UTC today the route floors against, so a date the
     // server would refuse never leaves the page.
+    //
+    // An untouched field is parsed as no date at all rather than as its seeded
+    // value. Both halves of this matter: `utcToday` is the floor AND the seed,
+    // so once the tab has outlived UTC midnight the seeded value is below its
+    // own floor, and parsing it would fail an ordinary dosage change here —
+    // before any request — with a field error on a date the user never chose.
     const parsed = dosageInputSchemaFor(utcToday).safeParse({
       daily_dosage: dailyDosage,
-      effective_date: dosageDate,
+      effective_date: dosageDateTouched ? dosageDate : undefined,
     });
     if (!parsed.success) {
       setPanelErrors(zodFieldErrors(parsed.error));
@@ -408,7 +425,9 @@ export default function MedicationsManager({ initialMedications, specialists, lo
     // Today is never a collision even though a row exists for it: replacing
     // today's dosage is this panel's original purpose and the hint already says
     // so. `pending_dosage_changes` is strictly future-dated, so an unchanged
-    // field simply cannot match one.
+    // field simply cannot match one — and an untouched one is already
+    // `undefined` by the time it gets here, so the comparison below only ever
+    // decides the case where the user deliberately picked today.
     const effectiveDate = parsed.data.effective_date === utcToday ? undefined : parsed.data.effective_date;
     const clash =
       effectiveDate === undefined
@@ -684,21 +703,17 @@ export default function MedicationsManager({ initialMedications, specialists, lo
                         {/*
                           `not_started` names the day the dosage actually
                           begins, which is not necessarily the soonest pending
-                          row: a medication can carry a scheduled stop AND a
-                          later scheduled resume, and `not_started` fires
-                          whenever a nonzero row is pending anywhere in the
-                          series — so the soonest row can itself be 0/day.
-                          Find the first nonzero one rather than assume `[0]`
-                          is it. The map entry stays as the fallback for the
-                          (structurally unreachable, but the `Record` has to
-                          be total) case where none is found.
+                          row — it can itself be 0/day. The rule is shared with
+                          `deriveStatus`'s trigger and the dashboard's reason
+                          line rather than re-derived here; see
+                          `nextNonzeroPendingChange`. The map entry stays as the
+                          fallback for the (structurally unreachable, but the
+                          `Record` has to be total) case where none is found.
                         */}
                         <span className={STATUS_CLASS[medication.status]}>
                           {(() => {
                             if (medication.status !== "not_started") return STATUS_LABEL[medication.status];
-                            const nextNonzero = medication.pending_dosage_changes.find(
-                              (change) => change.daily_dosage !== 0,
-                            );
+                            const nextNonzero = nextNonzeroPendingChange(medication.pending_dosage_changes);
                             return nextNonzero
                               ? `Starts ${nextNonzero.effective_date}`
                               : STATUS_LABEL[medication.status];
@@ -925,6 +940,7 @@ export default function MedicationsManager({ initialMedications, specialists, lo
                             min={utcToday}
                             onChange={(value) => {
                               setDosageDate(value);
+                              setDosageDateTouched(true);
                               setPanelErrors((previous) => ({ ...previous, effective_date: "" }));
                             }}
                             error={panelErrors.effective_date || undefined}

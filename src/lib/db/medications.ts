@@ -81,6 +81,28 @@ export interface MedicationView extends Medication {
 }
 
 /**
+ * The soonest pending change that actually starts a dosage, or `undefined`.
+ *
+ * **Not `pending[0]`, and the difference is the whole reason this exists.** A
+ * medication can carry a scheduled stop followed by a later scheduled resume,
+ * so the soonest pending row can itself be 0/day. `not_started` fires whenever a
+ * nonzero row is pending *anywhere* in the series, so anything naming the day
+ * the dosage begins has to skip the zeros to agree with the status it is
+ * labelling.
+ *
+ * It is one exported function rather than three `.find()` calls — `deriveStatus`'s
+ * trigger, the dashboard's reason line and the medications-list label — for the
+ * reason `nextVisitFor` (`@/lib/dashboard`) gives for existing at all: defining
+ * it twice is how they end up disagreeing about one row. The rule is the shipped
+ * `not_started` contract; see the plan's Phase 2 §4.
+ */
+export function nextNonzeroPendingChange(
+  pending: MedicationView["pending_dosage_changes"],
+): MedicationView["pending_dosage_changes"][number] | undefined {
+  return pending.find((change) => change.daily_dosage !== 0);
+}
+
+/**
  * Why a call failed, in domain terms. Postgres codes and messages stop here.
  *
  * `no_specialist` is the composite-FK violation raised when `specialist_id`
@@ -115,6 +137,15 @@ const FK_VIOLATION = "23503";
  * row errors, a command with no policy silently matches nothing.
  */
 const RLS_VIOLATION = "42501";
+
+/**
+ * `unique_violation` — here, only ever `unique (medication_id, effective_date)`.
+ * The ordinary write paths keep it unreachable by construction (DELETE-then-
+ * INSERT on the target date), so the one place it is handled rather than
+ * prevented is `setDosage`'s restore retry, where it is a benign outcome rather
+ * than a failure. See that branch.
+ */
+const UNIQUE_VIOLATION = "23505";
 
 /**
  * Collapsing a Postgres error to a domain kind discards its code, message and
@@ -279,7 +310,7 @@ function toView(row: MedicationRow, today: string): MedicationView {
     status: deriveStatus(
       medication.archived_at,
       dosage_changes.length,
-      pendingChanges.some((change) => change.daily_dosage !== 0),
+      nextNonzeroPendingChange(pendingChanges) !== undefined,
       currentDosage,
       supply.projectedQuantity,
     ),
@@ -384,21 +415,28 @@ export async function createMedication(
   const { error: dosageError } = await client
     .from("dosage_changes")
     .insert({ medication_id: medication.id, daily_dosage: input.daily_dosage, effective_date: written });
+  // A refusal is NOT the partial-create case this function's header describes.
+  // The header's reasoning is that a missing dosage row is a legal state the
+  // UI labels — true when the insert failed for an ordinary reason. Under the
+  // tightened INSERT policy there is a new way to get here: `written` was
+  // resolved from the Worker's clock and Postgres has since rolled past UTC
+  // midnight. Reporting that as a successful create hands back a silently
+  // `no_dosage` medication with the user's number thrown away. The medication
+  // row does exist by now and is not rolled back — PostgREST has no
+  // transaction to do it in — so the route says so rather than pretending
+  // either that nothing happened or that everything did.
+  //
+  // **The refusal is recorded and answered below, not returned here.** Only
+  // `dosage_changes` is date-guarded; `supply_events_insert_own` is ownership-
+  // only (`20260821182457:140`), so the starting quantity would have been
+  // written had the attempt been made. Returning at this point skipped it and
+  // lost a second figure the user typed, while the route's message named only
+  // the dosage — so the salvageable insert runs first and the refusal is
+  // reported afterwards.
+  let dosageRefused = false;
   if (dosageError) {
     logDbError("create.dosage", dosageError);
-    // A refusal is NOT the partial-create case this function's header describes.
-    // The header's reasoning is that a missing dosage row is a legal state the
-    // UI labels — true when the insert failed for an ordinary reason. Under the
-    // tightened INSERT policy there is a new way to get here: `written` was
-    // resolved from the Worker's clock and Postgres has since rolled past UTC
-    // midnight. Reporting that as a successful create hands back a silently
-    // `no_dosage` medication with the user's number thrown away. The medication
-    // row does exist by now and is not rolled back — PostgREST has no
-    // transaction to do it in — so the route says so rather than pretending
-    // either that nothing happened or that everything did.
-    if (dosageError.code === RLS_VIOLATION) {
-      return { ok: false, error: "date_not_allowed" };
-    }
+    dosageRefused = dosageError.code === RLS_VIOLATION;
   }
 
   // A starting quantity of 0 writes NO row: `supply_events_refill_is_positive`
@@ -416,6 +454,10 @@ export async function createMedication(
     if (supplyError) {
       logDbError("create.supply", supplyError);
     }
+  }
+
+  if (dosageRefused) {
+    return { ok: false, error: "date_not_allowed" };
   }
 
   return readMedication(client, medication.id, today);
@@ -506,10 +548,12 @@ export async function updateMedicationDetails(
  * INSERT was refused `42501` because UTC midnight passed after the DELETE
  * committed, re-inserting at the same — now past — date is refused for exactly
  * the same reason, and the value the DELETE captured is gone for good. So a
- * refused restore is retried once at a freshly-resolved UTC today. The retry
- * fires only when the date was the server-derived default: a client-supplied
- * date the policy refuses must not be silently relocated to a different day,
- * because the caller asked for a specific one. The retried row lands a day
+ * refused restore is retried once at a freshly-resolved UTC today, whatever the
+ * caller named. The retry is NOT gated on the date having been server-derived:
+ * the caller never asked for the removed row to move, so putting its value back
+ * on the current day is not relocating their request — and the client cannot be
+ * trusted to signal "untouched" anyway, since it compares the field against a
+ * `utcToday` frozen at page render. The retried row lands a day
  * later than the one that was removed, so the series has a one-day seam where
  * `doseInForce` reads whatever preceded it — the cost of not destroying the
  * user's number.
@@ -527,7 +571,6 @@ export async function setDosage(
   // floored against the server's UTC today by `dosageInputSchemaFor`; this is
   // not the place that check belongs, because the policy is the actual guard and
   // a second one here would only disagree with it at a day boundary.
-  const serverDerived = effectiveDate === undefined;
   const written = effectiveDate ?? todayUtc();
 
   const { data: removed, error: deleteError } = await client
@@ -571,15 +614,22 @@ export async function setDosage(
 
         // The restore was refused for the same reason the INSERT was: `written`
         // is now in Postgres's past. Put the value back on the day that IS
-        // current instead of losing it. Only for a server-derived date, and only
-        // when the day has actually moved — retrying at the same date would just
-        // be refused again.
+        // current instead of losing it — only when the day has actually moved,
+        // since retrying at the same date would just be refused again.
         const retryDate = todayUtc();
-        if (restoreError.code === RLS_VIOLATION && serverDerived && retryDate !== written) {
+        if (restoreError.code === RLS_VIOLATION && retryDate !== written) {
           const { error: retryError } = await client
             .from("dosage_changes")
             .insert({ medication_id: id, daily_dosage: previous.daily_dosage, effective_date: retryDate });
-          if (retryError) {
+          // A collision here is NOT a failure and must not be cleared out of the
+          // way. `retryDate` is occupied only when a row has just become
+          // effective today — typically a change this slice scheduled — so a
+          // dosage IS in force and there is nothing left to restore. Mirroring
+          // the primary path's DELETE-then-INSERT would destroy that row and
+          // write a stale value over it, which is the loss this retry exists to
+          // prevent. The unrecovered row at `written` is the one-day seam the
+          // header already accepts.
+          if (retryError && retryError.code !== UNIQUE_VIOLATION) {
             logDbError("setDosage.restore.retry", retryError);
           }
         }

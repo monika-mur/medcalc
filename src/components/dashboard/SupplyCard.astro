@@ -1,6 +1,6 @@
 ---
 import type { CardState } from "@/lib/dashboard";
-import type { MedicationView } from "@/lib/db/medications";
+import { nextNonzeroPendingChange, type MedicationView } from "@/lib/db/medications";
 
 interface Props {
   medication: MedicationView;
@@ -65,13 +65,12 @@ const nextChange = medication.pending_dosage_changes.at(0);
 
 /*
   The `not_started` reason names the day the DOSAGE actually begins, which is
-  not necessarily `nextChange`. A medication can carry more than one pending
-  row — a scheduled stop followed later by a scheduled resume — and if the
-  soonest one is itself 0/day, `not_started`'s trigger (a nonzero row is pending
-  *somewhere*) still fires, but pointing the reason at `nextChange` would name
-  the stop date and call it a start. Find the first nonzero one instead.
+  not necessarily `nextChange`: if the soonest pending row is itself 0/day,
+  pointing the reason at it would name a stop date and call it a start. The rule
+  is shared with `deriveStatus`'s trigger and the medications-list label rather
+  than re-derived here — see `nextNonzeroPendingChange`.
 */
-const nextNonzeroChange = medication.pending_dosage_changes.find((change) => change.daily_dosage !== 0);
+const nextNonzeroChange = nextNonzeroPendingChange(medication.pending_dosage_changes);
 
 /*
   `not_started` is tested on `medication.status`, NOT on `state`: it has no card

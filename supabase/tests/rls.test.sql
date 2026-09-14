@@ -196,10 +196,16 @@ select is((select count(*) from public.dosage_changes)::int, 1,
 select is((select count(*) from public.dosage_changes
            where user_id = 'b0000000-0000-0000-0000-00000000000b')::int, 0,
   'dosage_changes: A sees none of B''s rows');
+-- The date is `current_date + 1`, not a literal. Since S-05 tightened
+-- `dosage_changes_insert_own` to `... and effective_date >= current_date`, a
+-- past-dated literal here would make this assertion pass for either of two
+-- independent reasons, and a regression that broke ownership-checking alone
+-- would be masked by the past-date refusal. A future date isolates it to
+-- ownership.
 select throws_ok($$
     insert into public.dosage_changes (user_id, medication_id, daily_dosage, effective_date)
     values ('b0000000-0000-0000-0000-00000000000b',
-            'd1000000-0000-0000-0000-00000000000b', 2, '2026-06-01')
+            'd1000000-0000-0000-0000-00000000000b', 2, current_date + 1)
   $$, '42501', null,
   'dosage_changes: A cannot insert a row owned by B');
 

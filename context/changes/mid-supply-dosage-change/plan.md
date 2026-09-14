@@ -407,8 +407,14 @@ route can answer 400 with a field error rather than an unexplained 500. Log it (
 _Log the database error before collapsing it to a domain kind_): reaching it means either a
 raw request or the two-clock midnight window, and both are worth a trace.
 
-Also return whether the DELETE removed anything, so the caller can distinguish "scheduled"
-from "replaced" in its success message.
+An earlier draft also had `setDosage` return whether the DELETE removed anything, so the caller
+could distinguish "scheduled" from "replaced" in its success message. **Dropped during
+implementation, deliberately.** The island already knows which case it is: it distinguishes
+scheduled from immediate by `effectiveDate !== undefined`, and the replace case is reached only
+through an explicit confirm dialog that has already named both the existing value and the
+replacement. A server-side flag would have arrived with no consumer — the same "no second copy
+without a consumer" reasoning this plan applies at §4 to the soonest-change field
+(plan-review F10). Amended after impl-review F4 found the plan text still specifying it.
 
 #### 3. Cancel a pending change
 
@@ -438,11 +444,27 @@ the next reader does not "tighten" it into a bug. Raised in plan-review as F7.
 and expose the scheduled changes the UI must name.
 
 **Contract**: `MedicationStatus` gains `not_started`. `deriveStatus` currently takes
-`dosageCount`; it needs enough to tell "every row is future-dated" from "a row in force says
-0", so pass the dosage rows — or a boolean precomputed in `toView` — rather than only the
-count. Precedence: after `no_dosage` and before `not_used`, because a medication with no row
-in force yet has no dosage today either way, and "has one scheduled" is the more specific
-answer.
+`dosageCount`; it needs enough to tell a dosage that has not begun from one the user stopped,
+so pass the dosage rows — or a boolean precomputed in `toView` — rather than only the count.
+Precedence: after `no_dosage` and before `not_used`, because a medication with no row in force
+yet has no dosage today either way, and "has one scheduled" is the more specific answer.
+
+**The trigger is value-gated, not shape-gated, and that is the shipped contract.** An earlier
+draft of this paragraph specified it as "every dosage row is future-dated" versus "a row in
+force says 0". That is too narrow, and Phase 4's manual step 4.7 proved it: a medication created
+at 0/day with the real dose scheduled for later — an ordinary thing to do through the create
+form, since 0 is a legal dosage there — has a row in force, so it failed the "every row is
+future-dated" test and read **"Stopped"**. The rule that shipped is
+`currentDosage === 0 && hasNonzeroPending`: nothing in force today, and a _nonzero_ row pending.
+Gating on the value is what keeps a second pending 0/day row — a user re-confirming a stop —
+reading as `not_used` rather than as a dosage about to begin. It also means the state is
+reachable through the panel, which the plan elsewhere says it is not; that note stands only for
+the narrower trigger. For the same reason, any consumer naming the start date must find the
+first **nonzero** pending row rather than the soonest one, since a stop-then-resume series can
+carry a 0/day row ahead of the real one. Recorded in `change.md`'s session log under the
+2026-09-13 entry; amended here after impl-review F5 found the plan still naming the superseded
+trigger. This slice ships no automated tests, so this paragraph is the specification the
+eventual test slice inherits.
 
 `MedicationView` gains the pending changes — rows with `effective_date > today` — sorted
 ascending. **One field, not two**: an earlier draft added the soonest change alongside the

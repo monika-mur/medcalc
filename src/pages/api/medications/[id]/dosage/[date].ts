@@ -1,7 +1,6 @@
 import type { APIRoute } from "astro";
-import { z } from "zod";
 import { json, jsonError } from "@/lib/api/json";
-import { readId } from "@/lib/api/params";
+import { readDateParam, readId } from "@/lib/api/params";
 import { resolveTodayForUser } from "@/lib/dates";
 import { cancelDosageChange } from "@/lib/db/medications";
 import { createClient } from "@/lib/supabase";
@@ -40,22 +39,15 @@ export const DELETE: APIRoute = async (context) => {
     return jsonError(404, "Medication not found");
   }
 
-  // A malformed segment is a 404, not a 400 — the same reasoning `readId`
-  // records for a non-uuid id (`@/lib/api/params`). Unvalidated it would reach
-  // Postgres as `22P02 invalid input syntax for type date` and surface as a 500,
-  // and the honest answer is the one a well-formed date naming no row gets:
-  // there is no such scheduled change. No floor here either; see the header.
-  const parsedDate = z.iso.date().safeParse(context.params.date);
-  if (!parsedDate.success) {
+  // A malformed segment is a 404, not a 400 — the reasoning lives with the
+  // parser in `@/lib/api/params`, alongside `readId`'s. No floor here either;
+  // see the header.
+  const date = readDateParam(context.params);
+  if (!date) {
     return jsonError(404, "Scheduled change not found");
   }
 
-  const result = await cancelDosageChange(
-    supabase,
-    id,
-    parsedDate.data,
-    resolveTodayForUser(context.locals.user.user_metadata),
-  );
+  const result = await cancelDosageChange(supabase, id, date, resolveTodayForUser(context.locals.user.user_metadata));
   if (!result.ok) {
     if (result.error === "not_found") {
       // Covers all three zero-row cases the policy produces and does not
