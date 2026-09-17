@@ -78,6 +78,9 @@ the assertion.
 
 #### 1. The segmental walk — the arithmetic this slice exists to prove
 
+**Covered, 2026-09-15** — `tests/unit/supply.test.ts`, `describe("computeSupply — S-05
+future-dated dosage shapes")`, all four bullets below (with the corrected date above).
+
 `computeSupply` needs no change for S-05, so its existing worked examples still apply and are
 specified in `supply-status-dashboard/follow-ups/supply-engine-tests.md`. What is untested is
 the shape S-05 makes reachable for the first time: **a dosage row dated after `today`**.
@@ -87,11 +90,19 @@ events:    +30 on 2026-09-10
 dosages:   1/day from 2026-09-10, 3/day from 2026-09-17
 expiry:    2027-01-01
 today:     2026-09-10
-expect:    supplyEndDate 2026-09-24, reason "consumption", projectedQuantity 30
+expect:    supplyEndDate 2026-09-23, reason "consumption", projectedQuantity 30
 ```
 
+> **Correction, 2026-09-15**: this example's stated result was `2026-09-24`, and that is an
+> off-by-one. Verified during `/10x-research` for `testing-supply-engine-unit-coverage`
+> (independent hand-derivation, then confirmed against the engine): seven doses starting on
+> 2026-09-17 land on the 17th through the **23rd** — `09-17 + 6`, not `+7`. The prose below
+> derives the day count correctly and then miscounts the final offset when turning it into a
+> date. Covered as-corrected in `tests/unit/supply.test.ts` → "advances the dose exactly at its
+> own future effective date".
+
 Seven days at 1/day leaves 23; 23 ÷ 3 is 7 whole days, so the last full dose falls on
-2026-09-24. Getting 2026-10-09 means the future row was ignored (`doseInForce` never advanced);
+2026-09-23. Getting 2026-10-09 means the future row was ignored (`doseInForce` never advanced);
 getting 2026-09-19 means the new dose was applied from `today` rather than from its own
 effective date. Both are plausible-looking dates, which is the whole problem with this class.
 
@@ -110,6 +121,9 @@ is most likely to get backwards:
 
 #### 2. `deriveStatus` and the `not_started` precedence
 
+**Covered, 2026-09-15** — `tests/unit/medication-status.test.ts`, six rows (as corrected above,
+not the original five), plus `nextNonzeroPendingChange` asserted directly.
+
 Assert all five status outcomes in one block so the precedence is visible as a whole, and name
 the reasoning in the test title for the two that read as bugs:
 
@@ -117,17 +131,26 @@ the reasoning in the test title for the two that read as bugs:
 it("reports not_started when every dosage row is future-dated, NOT not_used — a medication whose dosage starts next Monday has not been stopped, and 'Stopped' is what S-04 shipped for this row", ...)
 ```
 
-| dosage rows                         | in force today | expected      |
-| ----------------------------------- | -------------- | ------------- |
-| none                                | —              | `no_dosage`   |
-| one, dated `today + 7`              | none           | `not_started` |
-| one, dated `today`, value 0         | 0              | `not_used`    |
-| one dated `today` at 0, one at `+7` | 0              | `not_used`    |
-| one, dated `today`, value 2         | 2              | `active`      |
+| dosage rows                                     | in force today | expected      |
+| ----------------------------------------------- | -------------- | ------------- |
+| none                                            | —              | `no_dosage`   |
+| one, dated `today + 7`                          | none           | `not_started` |
+| one, dated `today`, value 0                     | 0              | `not_used`    |
+| one dated `today` at 0, one **nonzero** at `+7` | 0              | `not_started` |
+| one dated `today` at 0, one **also 0** at `+7`  | 0              | `not_used`    |
+| one, dated `today`, value 2                     | 2              | `active`      |
 
-Row four is the one worth arguing about and worth pinning: a user who stopped today _and_
-scheduled a restart is stopped today. `not_started` means "has never been in force", not "will
-change".
+> **Correction, 2026-09-15**: row four above previously read `not_used`, on the reasoning "a
+> user who stopped today _and_ scheduled a restart is stopped today." That rule was superseded
+> during S-04's impl-review (finding F5) after this entry was written — the amended contract
+> lives in `mid-supply-dosage-change/plan.md` and ships in `src/lib/db/medications.ts`
+> (`deriveStatus`): `not_started` fires on `currentDosage === 0 && hasNonzeroPending`, because a
+> medication created at 0/day with a real dose scheduled later must not read as "Stopped" — that
+> is the wrong word for "starts next Monday". The fifth row (both rows at 0) is what the
+> original "row four" was actually guarding, and was missing from this table entirely: the
+> pending row's _value_ is what tells a genuine stop apart from a start, not merely its
+> presence. Both rows verified during `/10x-research` for `testing-supply-engine-unit-coverage`
+> and covered in `tests/unit/medication-status.test.ts`.
 
 #### 3. The cancel path's 404 — an invisible failure
 

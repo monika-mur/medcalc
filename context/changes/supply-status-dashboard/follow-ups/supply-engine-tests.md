@@ -116,13 +116,27 @@ passed with the defect live.
 
 ## Unit tests
 
-The scratch harness at `../scratch/engine-harness.md` already asserts everything
-below and ran **49/49 green** against `src/lib/{dates,decimal,supply}.ts` on
-2026-09-08. **Lift it rather than re-deriving it** — but port it as named `it()`
-blocks, not as its current `eq(label, ...)` calls, so a failure names the rule
-rather than a line number. The harness holds _copies_ of the three modules and is
-stale the moment `src/lib/` changes; the ported suite imports them, which is the
-whole point of porting it.
+**Covered, 2026-09-15** — `tests/unit/{decimal,dates,supply}.test.ts`. See the
+correction below before trusting the harness's own count.
+
+> **Correction, 2026-09-15**: the claim that the committed harness "already
+> asserts everything below" was an overclaim, caught during `/10x-research` for
+> `testing-supply-engine-unit-coverage`. The committed `../scratch/engine-harness.md`
+> holds **32** `eq(...)` assertions (re-run verbatim against current code and
+> confirmed still 32/32 green). The **49/49** figure below refers to a broadened
+> version of the harness that was run once, on 2026-09-08, and never committed —
+> so roughly 17 assertions this section implies exist in the harness in fact
+> existed only in that session. The ported suite was written from this
+> document's prose, not lifted from the harness file, for exactly that reason.
+
+The scratch harness at `../scratch/engine-harness.md` asserts a 32-case subset of
+what follows, and ran **49/49 green** against `src/lib/{dates,decimal,supply}.ts`
+on 2026-09-08 in an uncommitted, broadened form. **Lift what it has rather than
+re-deriving it** — but port it as named `it()` blocks, not as its current
+`eq(label, ...)` calls, so a failure names the rule rather than a line number.
+The harness holds _copies_ of the three modules and is stale the moment
+`src/lib/` changes; the ported suite imports them, which is the whole point of
+porting it.
 
 ### `computeSupply` — the six worked examples
 
@@ -210,6 +224,11 @@ events by date makes it linear if volume ever justifies it. (S-04 impl-review F4
 
 ## The display path uses the same exact arithmetic as the write path
 
+**Covered, 2026-09-15** — `discrepancyPhrase` extracted to `src/lib/notices.ts`
+(it was module-private in the island and could not be imported by a test) and
+asserted in `tests/unit/notices.test.ts` against exactly the five cases named
+below.
+
 **Found during Phase 3 manual verification on 2026-09-10, and not predicted by
 the plan.** Criterion 3.7 passed at the database level and failed on screen: the
 `recount` row held `quantity_delta = -0.2` exactly, while the success notice read
@@ -248,6 +267,11 @@ test and a convention rather than a compiler guarantee.
 `tests/integration/`, using `createAuthenticatedClient`. `npm test` requires a
 running local stack and the helper refuses a non-local `SUPABASE_URL`.
 
+**Still open** — these are route/PostgREST-level assertions and belong to
+rollout Phase 2 ("Medications write-path integration coverage") in
+`context/foundation/test-plan.md`, not to the unit-only phase that closed the
+other sections in this document.
+
 - **A recount round-trip through PostgREST with fractional values**, asserting
   the row lands rather than tripping `23514`. This is the assertion that would
   have caught the display defect above had it been written at the _route_ level
@@ -264,24 +288,35 @@ running local stack and the helper refuses a non-local `SUPABASE_URL`.
   only a raw request reaches it.
 - A correction to exactly the projected figure writes **no** row and returns 200
   with the unchanged medication.
-- A dashboard render for a user with two specialists, asserting group order (by
-  next visit ascending, no-visit groups last, ties by specialist name) and card
-  states.
-- `deriveStatus` over all four dosage/quantity combinations **plus the empty
-  series**, asserting that "no dosage row" and "dosage set to 0" do not collapse
-  onto one status. The first is a data gap the app must admit to; the second is
-  the user's own choice.
 - No `medications.recordSupply.*` line reaches the log for a successful
   correction — an expected outcome is not an incident (`lessons.md` → _Log the
   database error before collapsing it to a domain kind_).
+
+**Covered as pure-function unit tests, 2026-09-15** — the two items below were
+listed here as integration tests but the logic they exercise is pure and needed
+no live stack, so they landed in the unit-only phase instead:
+
+- A dashboard render for a user with two specialists, asserting group order (by
+  next visit ascending, no-visit groups last, ties by specialist name) and card
+  states → `tests/unit/dashboard.test.ts`.
+- `deriveStatus` over all dosage/quantity combinations **plus the empty
+  series**, asserting that "no dosage row" and "dosage set to 0" do not collapse
+  onto one status → `tests/unit/medication-status.test.ts` (extended to six rows;
+  see the correction in `mid-supply-dosage-change/follow-ups/deferred-tests.md`).
 
 ---
 
 ## What ships without coverage
 
-S-04 adds no automated test of any kind. The 70 pgTAP assertions and the Vitest
-integration suite still run, but nothing in them exercises a single line of
-`src/lib/{supply,decimal,dashboard}.ts` or the new `recount` write path.
+**Partially superseded, 2026-09-15** — `src/lib/{supply,decimal,dates,dashboard}.ts`
+now have unit coverage via `testing-supply-engine-unit-coverage`. The `recount`
+write path itself (the route/PostgREST layer, as opposed to the pure arithmetic
+it calls) remains uncovered and is rollout Phase 2's job. The paragraph below is
+kept as the historical record of S-04's state at merge.
+
+S-04 shipped with no automated test of any kind. The 70 pgTAP assertions and the
+Vitest integration suite still ran, but nothing in them exercised a single line
+of `src/lib/{supply,decimal,dashboard}.ts` or the new `recount` write path.
 
 Worth stating plainly, because a green CI badge on this slice means less than
 usual: **CI runs `lint`, `typecheck` and `build`** (`.github/workflows/ci.yml:20-29`)

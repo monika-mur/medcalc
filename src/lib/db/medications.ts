@@ -233,7 +233,7 @@ interface MedicationRow extends Medication {
  * staying zero", so `not_used` is the honest word for it. Only a nonzero
  * pending row promises a different number is coming.
  */
-function deriveStatus(
+export function deriveStatus(
   archivedAt: string | null,
   dosageCount: number,
   hasNonzeroPending: boolean,
